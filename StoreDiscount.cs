@@ -3,7 +3,7 @@ using System.Linq;
 
 //Write a program that takes an array of prices, and for each price greater than 20, it calculates a discount of 10% , greater then or  //equal to   50 then 25 %, else no discount
 
-namespace HelloWorld
+namespace Store
 {
 	class Prices
     {
