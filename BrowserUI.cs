@@ -106,7 +106,8 @@ public static class BrowserUI
                 input, select, button { font: inherit; padding: .6rem; }
                 input { box-sizing: border-box; width: 100%; }
                 button { margin-top: 1rem; cursor: pointer; }
-                .error { color: #a00000; margin-top: 1rem; }
+                .input-help { color: #555; font-size: .95rem; margin: .4rem 0 0; }
+                .error { background: #fff0f0; border: 1px solid #c62828; border-left: 5px solid #a00000; border-radius: 4px; color: #7a0000; font-weight: 600; margin-top: 1rem; padding: .8rem 1rem; }
                 table { border-collapse: collapse; margin-top: 1.5rem; width: 100%; }
                 th, td { border-bottom: 1px solid #ccc; padding: .65rem; text-align: right; }
                 th:first-child, td:first-child { text-align: left; }
@@ -117,9 +118,10 @@ public static class BrowserUI
               <p class="rules">Prices above R20 and below R50 receive 10% off. Prices at or above R50 receive 25% off. Prices at or below R20 receive no discount.</p>
               <form method="post">
                 <label for="prices">Prices</label>
-                <input id="prices" name="prices" value="
+                <input id="prices" name="prices" aria-describedby="prices-help" value="
             """).Append(HtmlEncoder.Default.Encode(pricesInput)).Append("""
             " placeholder="12.30, 33.89, 56.10" required>
+                <p class="input-help" id="prices-help">Separate prices with commas or spaces. Example: <code>12.30, 33.89 56.10</code>.</p>
                 <label for="collection">Price collection</label>
                 <select id="collection" name="collection">
             """);
@@ -134,7 +136,7 @@ public static class BrowserUI
 
         if (error is not null)
         {
-            html.Append("<p class=\"error\">Error: ")
+            html.Append("<p class=\"error\" role=\"alert\">Error: ")
                 .Append(HtmlEncoder.Default.Encode(error))
                 .Append("</p>");
         }
