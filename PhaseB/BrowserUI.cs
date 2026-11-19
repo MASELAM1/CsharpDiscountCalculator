@@ -33,21 +33,29 @@ public static class BrowserUI
             var form = await request.ReadFormAsync();
             var firstNames = form["firstNames"].ToArray();
             var lastNames = form["lastNames"].ToArray();
+            var corporateCodes = form["corporateCodes"].ToArray();
+            var customerCodes = form["customerCodes"].ToArray();
             var travelers = new List<Traveler>();
-            var corporateCode = form["corporateCode"].ToString();
-            var customerCode = form["customerCode"].ToString();
             var hotelCategoryInput = form["hotelCategory"].ToString();
             var selectedSectors = new List<TravelSector>();
             HotelCategory? hotelCategory = null;
             TravelQuote? quote = null;
             string? error = null;
 
-            var travelerFieldCount = Math.Max(firstNames.Length, lastNames.Length);
+            var travelerFieldCount = new[]
+            {
+                firstNames.Length,
+                lastNames.Length,
+                corporateCodes.Length,
+                customerCodes.Length
+            }.Max();
             for (var index = 0; index < travelerFieldCount; index++)
             {
                 var firstName = index < firstNames.Length ? firstNames[index] ?? string.Empty : string.Empty;
                 var lastName = index < lastNames.Length ? lastNames[index] ?? string.Empty : string.Empty;
-                travelers.Add(new Traveler(firstName, lastName));
+                var corporateCode = index < corporateCodes.Length ? corporateCodes[index] ?? string.Empty : string.Empty;
+                var customerCode = index < customerCodes.Length ? customerCodes[index] ?? string.Empty : string.Empty;
+                travelers.Add(new Traveler(firstName, lastName, corporateCode, customerCode));
             }
 
             try
@@ -72,14 +80,14 @@ public static class BrowserUI
                     if (!Enum.TryParse<HotelCategory>(hotelCategoryInput, true, out var parsedCategory)
                         || !Enum.IsDefined(parsedCategory))
                     {
-                        throw new FormatException("Choose BnB or a hotel rating from 1 to 5 stars.");
+                        throw new FormatException("Choose BnB or a Hotel rating from 1 to 5 stars.");
                     }
 
                     hotelCategory = parsedCategory;
                 }
 
                 quote = new TravelQuoteService().Calculate(
-                    new TravelBooking(travelers, selectedSectors, hotelCategory, corporateCode, customerCode));
+                    new TravelBooking(travelers, selectedSectors, hotelCategory));
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
             {
@@ -91,8 +99,6 @@ public static class BrowserUI
                 travelers,
                 selectedSectors,
                 hotelCategoryInput,
-                corporateCode,
-                customerCode,
                 quote,
                 error));
         });
@@ -123,8 +129,6 @@ public static class BrowserUI
         IReadOnlyList<Traveler>? travelers = null,
         IReadOnlyCollection<TravelSector>? selectedSectors = null,
         string hotelCategoryInput = "",
-        string corporateCode = "",
-        string customerCode = "",
         TravelQuote? quote = null,
         string? error = null)
     {
@@ -160,8 +164,8 @@ public static class BrowserUI
               </style>
             </head>
             <body>
-              <h1>Travel booking quote <small>PhaseB</small></h1>
-              <p class="hint">Demo prices are per traveler. BnB costs the same as a 2-star hotel; higher star ratings cost more.</p>
+              <h1>Travel booking Quote <small>PhaseB</small></h1>
+              <p class="hint">Demo prices are per traveler. BnB costs the same as a 2-star Hotel; higher star ratings cost more.</p>
               <form method="post">
                 <fieldset>
                   <legend>Travelers</legend>
@@ -185,7 +189,19 @@ public static class BrowserUI
                 .Append(index)
                 .Append("\" name=\"lastNames\" type=\"text\" autocomplete=\"family-name\" required value=\"")
                 .Append(HtmlEncoder.Default.Encode(traveler.LastName))
-                .Append("\"><button type=\"button\" class=\"remove-traveler\">Remove traveler</button></fieldset>");
+                .Append("\"><label for=\"corporate-code-")
+                .Append(index)
+                .Append("\">Corporate code</label><input id=\"corporate-code-")
+                .Append(index)
+                .Append("\" name=\"corporateCodes\" type=\"text\" autocomplete=\"off\" value=\"")
+                .Append(HtmlEncoder.Default.Encode(traveler.CorporateCode ?? string.Empty))
+                .Append("\" placeholder=\"111ZAA\"><label for=\"customer-code-")
+                .Append(index)
+                .Append("\">Customer code</label><input id=\"customer-code-")
+                .Append(index)
+                .Append("\" name=\"customerCodes\" type=\"text\" autocomplete=\"off\" value=\"")
+                .Append(HtmlEncoder.Default.Encode(traveler.CustomerCode ?? string.Empty))
+                .Append("\" placeholder=\"ABC333\"><button type=\"button\" class=\"remove-traveler\">Remove traveler</button></fieldset>");
         }
 
         html.Append("""
@@ -237,17 +253,7 @@ public static class BrowserUI
 
         html.Append("""
                 </select>
-                <p class="hint">Hotel prices are demo prices per traveler and differ by category.</p>
-                <label for="corporate-code">Corporate code</label>
-                <input id="corporate-code" name="corporateCode" type="text" autocomplete="off" value="
-            """).Append(HtmlEncoder.Default.Encode(corporateCode)).Append("""
-            " placeholder="111ZAA">
-                <p class="hint">Enter 111ZAA for corporate sector discounts.</p>
-                <label for="customer-code">Customer code</label>
-                <input id="customer-code" name="customerCode" type="text" autocomplete="off" value="
-            """).Append(HtmlEncoder.Default.Encode(customerCode)).Append("""
-            " placeholder="ABC333">
-                <p class="hint">Customer codes must be three letters followed by 333. The 13.5% discount requires a booking subtotal above R15,000. Corporate discounts take precedence and do not stack.</p>
+                <p class="hint">Hotel prices are demo prices per traveler and differ by category. Enter a corporate code, a customer code, or neither for each traveler. Customer discounts require that traveler’s subtotal to be above R15,000; corporate discounts take precedence and do not stack.</p>
                 <button type="submit">Calculate quote</button>
               </form>
             """);
@@ -267,7 +273,7 @@ public static class BrowserUI
                 .Append("""
                 </p>
                 <table>
-                  <thead><tr><th>Sector</th><th>Travelers</th><th>Unit price</th><th>Subtotal</th><th>Discount</th><th>Total</th></tr></thead>
+                  <thead><tr><th>Traveler</th><th>Sector</th><th>Unit price</th><th>Subtotal</th><th>Discount</th><th>Total</th></tr></thead>
                   <tbody>
             """);
 
@@ -276,8 +282,9 @@ public static class BrowserUI
                 var sectorName = line.Sector == TravelSector.Hotel
                     ? $"Hotel ({line.HotelCategory!.Value.ToDisplayName()})"
                     : line.Sector.ToString();
-                html.Append("<tr><td>").Append(HtmlEncoder.Default.Encode(sectorName))
-                    .Append("</td><td>").Append(line.TravelerCount)
+                html.Append("<tr><td>")
+                    .Append(HtmlEncoder.Default.Encode($"{line.Traveler.FirstName} {line.Traveler.LastName}"))
+                    .Append("</td><td>").Append(HtmlEncoder.Default.Encode(sectorName))
                     .Append("</td><td>R").Append(FormatPrice(line.UnitPrice))
                     .Append("</td><td>R").Append(FormatPrice(line.Subtotal))
                     .Append("</td><td>R").Append(FormatPrice(line.DiscountAmount))
@@ -315,6 +322,10 @@ public static class BrowserUI
                       '<input id="first-name-' + index + '" name="firstNames" type="text" autocomplete="given-name" required>' +
                       '<label for="last-name-' + index + '">Last name</label>' +
                       '<input id="last-name-' + index + '" name="lastNames" type="text" autocomplete="family-name" required>' +
+                      '<label for="corporate-code-' + index + '">Corporate code</label>' +
+                      '<input id="corporate-code-' + index + '" name="corporateCodes" type="text" autocomplete="off" placeholder="111ZAA">' +
+                      '<label for="customer-code-' + index + '">Customer code</label>' +
+                      '<input id="customer-code-' + index + '" name="customerCodes" type="text" autocomplete="off" placeholder="ABC333">' +
                       '<button type="button" class="remove-traveler">Remove traveler</button>';
                     container.appendChild(row);
                   });
