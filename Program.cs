@@ -1,3 +1,3 @@
 ﻿using CsharpDiscountCalculator;
 
-ConsoleUI.Run(args);
+await ConsoleUI.RunAsync(args);

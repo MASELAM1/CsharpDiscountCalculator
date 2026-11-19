@@ -4,7 +4,7 @@ namespace CsharpDiscountCalculator;
 
 public static class ConsoleUI
 {
-    public static void Run(string[] args)
+    public static async Task RunAsync(string[] args)
     {
         Console.WriteLine("================================");
         Console.WriteLine("  Discount Calculator");
@@ -18,6 +18,40 @@ public static class ConsoleUI
             return;
         }
 
+        while (true)
+        {
+            Console.WriteLine("Choose an interface:");
+            Console.WriteLine("  1. Terminal");
+            Console.WriteLine("  2. Browser");
+            Console.WriteLine("  3. Exit");
+            Console.Write("Selection: ");
+
+            var selection = Console.ReadLine()?.Trim();
+
+            if (selection is "3" or "exit")
+            {
+                return;
+            }
+
+            if (selection == "1")
+            {
+                RunTerminal();
+                return;
+            }
+
+            if (selection == "2")
+            {
+                await BrowserUI.RunAsync();
+                return;
+            }
+
+            Console.WriteLine("Please select 1, 2, or 3.");
+            Console.WriteLine();
+        }
+    }
+
+    private static void RunTerminal()
+    {
         while (true)
         {
             Console.WriteLine("Choose price collection:");

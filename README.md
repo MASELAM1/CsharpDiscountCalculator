@@ -1,7 +1,7 @@
 # C# Discount Calculator
 
-A complete console app that accepts prices, calculates discounts, and displays the
-results sorted by discounted price.
+A discount calculator with terminal and browser interfaces. Both accept prices,
+apply the same rules, and display results sorted by discounted price.
 
 ## Discount rules
 
@@ -15,14 +15,19 @@ results sorted by discounted price.
 dotnet run --project CsharpDiscountCalculator.csproj
 ```
 
-The app asks whether to enter prices through an array or a linked list.
-Example interactive input:
+Choose **Terminal** to use the existing interactive terminal interface, or
+**Browser** to start a local web interface and open it in your default browser.
+If the browser does not open automatically, the app prints the local URL to
+open manually. Stop the browser server with Ctrl+C.
+
+In either interface, enter values separated by commas or spaces and choose an
+array or linked list. Example input:
 
 ```text
 12.30, 33.89, 56.10, 9, 67.50
 ```
 
-Command-line input is also supported:
+Command-line input is also supported and continues to use the terminal output:
 
 ```bash
 dotnet run --project CsharpDiscountCalculator.csproj -- 12.30 33.89 56.10
@@ -30,14 +35,16 @@ dotnet run --project CsharpDiscountCalculator.csproj -- 12.30 33.89 56.10
 
 ## Code workflow
 
-The application starts in `Program.cs`, which calls `ConsoleUI.Run(args)`.
+The application starts in `Program.cs`, which calls `ConsoleUI.RunAsync(args)`.
 
 1. **Input mode**
    - When prices are supplied as command-line arguments, `ConsoleUI` joins them
-     into one string and processes them immediately.
-   - Without command-line arguments, `ConsoleUI` presents an interactive menu.
-     The user chooses an array, a linked list, or exit mode and enters prices
-     separated by commas or spaces.
+     into one string and processes them through the terminal interface.
+   - Without command-line arguments, the user chooses the terminal interface,
+     browser interface, or exit.
+   - The terminal interface preserves the array/linked-list selection and
+     prompts for another calculation. The browser interface accepts input on a
+     local web page and displays results there.
 
 2. **Parsing**
    - `DiscountCalculator.ParsePrices` splits the input into individual values,
@@ -57,18 +64,19 @@ The application starts in `Program.cs`, which calls `ConsoleUI.Run(args)`.
 4. **Sorting and output**
    - The collection overloads sort results by discounted price in ascending
      order, then by original price as a tie-breaker.
-   - `ConsoleUI.DisplayResults` prints the original price, discount amount,
-     and final discounted price in a table.
+   - The terminal interface prints the original price, discount amount, and
+     final discounted price in a table. The browser interface renders the same
+     columns and order in an HTML table.
 
 The main workflow is:
 
 ```text
 Program
-  -> ConsoleUI (interactive or command-line input)
+  -> ConsoleUI (terminal, browser, or command-line mode)
   -> ParsePrices
   -> DiscountCalculator
   -> sort by discounted price
-  -> ConsoleUI table output
+  -> terminal or browser table output
 ```
 
 ## Exception handling
@@ -84,12 +92,12 @@ input errors without allowing the console app to fail unexpectedly.
   `DiscountCalculator.Calculate(decimal)`.
 - `ArgumentNullException` is thrown if an overload receives a `null` collection.
 
-In interactive mode, `ConsoleUI` catches `ArgumentException`,
-`FormatException`, and `ArgumentOutOfRangeException`, prints the error message,
-and allows the user to try again. In command-line mode, it writes the error to
-standard error and sets the process exit code to `1`. Unexpected exceptions are
-not caught, so they remain visible for debugging rather than being presented as
-normal input errors.
+In terminal interactive mode, `ConsoleUI` catches input exceptions, prints the
+error message, and allows the user to try again. In browser mode, the page
+displays the validation error and keeps the entered prices available for
+correction. In command-line mode, errors are written to standard error and the
+process exit code is set to `1`. Unexpected exceptions are not caught as input
+errors, so they remain visible for debugging.
 
 ## Test
 
