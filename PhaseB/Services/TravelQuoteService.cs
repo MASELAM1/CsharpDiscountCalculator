@@ -53,91 +53,99 @@ public sealed class TravelQuoteService
             throw new ArgumentException("Choose a hotel category only when the Hotel sector is selected.");
         }
 
-        var corporateCode = booking.CorporateCode?.Trim();
-        var customerCode = booking.CustomerCode?.Trim();
-        var hasCorporateCode = !string.IsNullOrEmpty(corporateCode);
-        var hasCustomerCode = !string.IsNullOrEmpty(customerCode);
-
-        if (hasCorporateCode && !DiscountCodeValidator.IsCorporateCode(corporateCode))
-        {
-            throw new ArgumentException("The corporate code is not valid.");
-        }
-
-        if (hasCustomerCode && !DiscountCodeValidator.IsCustomerCode(customerCode))
-        {
-            throw new ArgumentException("Customer codes must contain three letters followed by 333.");
-        }
-
         var rates = CorporateDiscountRates();
-        var baseLines = booking.SelectedSectors
-            .Select(sector =>
-            {
-                var hotelCategory = sector == TravelSector.Hotel ? booking.HotelCategory : null;
-                var unitPrice = _priceCatalog.GetPricePerTraveler(sector, hotelCategory);
-                var subtotal = Round(unitPrice * booking.Travelers.Count);
-                return (Sector: sector, HotelCategory: hotelCategory, UnitPrice: unitPrice, Subtotal: subtotal);
-            })
-            .ToArray();
-        var subtotalTotal = Round(baseLines.Sum(line => line.Subtotal));
-
-        if (hasCorporateCode)
+        var lines = new List<TravelQuoteLine>();
+        var customerCodeCount = 0;
+        var corporateCodeCount = 0;
+        var customerDiscountCount = 0;
+        foreach (var (traveler, travelerIndex) in booking.Travelers.Select((traveler, index) => (traveler, index)))
         {
-            var lines = baseLines.Select(line =>
+            var corporateCode = traveler.CorporateCode?.Trim();
+            var customerCode = traveler.CustomerCode?.Trim();
+            var hasCorporateCode = !string.IsNullOrEmpty(corporateCode);
+            var hasCustomerCode = !string.IsNullOrEmpty(customerCode);
+
+            if (hasCorporateCode && !DiscountCodeValidator.IsCorporateCode(corporateCode))
             {
-                var rate = rates[line.Sector];
-                var discount = Round(line.Subtotal * rate);
-                return new TravelQuoteLine(
+                throw new ArgumentException($"Traveler {travelerIndex + 1} has an invalid corporate code.");
+            }
+
+            if (hasCustomerCode && !DiscountCodeValidator.IsCustomerCode(customerCode))
+            {
+                throw new ArgumentException($"Traveler {travelerIndex + 1} has an invalid customer code.");
+            }
+
+            corporateCodeCount += hasCorporateCode ? 1 : 0;
+            customerCodeCount += hasCustomerCode ? 1 : 0;
+
+            var travelerLines = booking.SelectedSectors
+                .Select(sector =>
+                {
+                    var hotelCategory = sector == TravelSector.Hotel ? booking.HotelCategory : null;
+                    var unitPrice = _priceCatalog.GetPricePerTraveler(sector, hotelCategory);
+                    return (Sector: sector, HotelCategory: hotelCategory, UnitPrice: unitPrice, Subtotal: Round(unitPrice));
+                })
+                .ToArray();
+            var travelerSubtotal = Round(travelerLines.Sum(line => line.Subtotal));
+            var hasCustomerDiscount = !hasCorporateCode
+                && hasCustomerCode
+                && travelerSubtotal > CustomerDiscountMinimumSubtotal;
+            var travelerCustomerDiscount = hasCustomerDiscount
+                ? Round(travelerSubtotal * CustomerDiscountRate)
+                : 0m;
+            customerDiscountCount += hasCustomerDiscount ? 1 : 0;
+
+            var allocatedCustomerDiscount = 0m;
+            for (var lineIndex = 0; lineIndex < travelerLines.Length; lineIndex++)
+            {
+                var line = travelerLines[lineIndex];
+                var rate = hasCorporateCode
+                    ? rates[line.Sector]
+                    : hasCustomerDiscount ? CustomerDiscountRate : 0m;
+                var discount = hasCorporateCode
+                    ? Round(line.Subtotal * rate)
+                    : hasCustomerDiscount && lineIndex == travelerLines.Length - 1
+                        ? travelerCustomerDiscount - allocatedCustomerDiscount
+                        : hasCustomerDiscount
+                            ? Round(travelerCustomerDiscount * line.Subtotal / travelerSubtotal)
+                            : 0m;
+                if (!hasCorporateCode && hasCustomerDiscount)
+                {
+                    allocatedCustomerDiscount += discount;
+                }
+
+                lines.Add(new TravelQuoteLine(
+                    traveler,
                     line.Sector,
                     line.HotelCategory,
-                    booking.Travelers.Count,
                     line.UnitPrice,
                     line.Subtotal,
                     rate,
                     discount,
-                    Round(line.Subtotal - discount));
-            }).ToArray();
-
-            var discountTotal = Round(lines.Sum(line => line.DiscountAmount));
-            var description = hasCustomerCode
-                ? "Corporate sector discounts applied; customer discount is not stacked."
-                : "Corporate sector discounts applied.";
-
-            return new TravelQuote(
-                booking.Travelers,
-                lines,
-                subtotalTotal,
-                discountTotal,
-                Round(subtotalTotal - discountTotal),
-                description);
+                    Round(line.Subtotal - discount)));
+            }
         }
 
-        var customerDiscount = hasCustomerCode && subtotalTotal > CustomerDiscountMinimumSubtotal
-            ? Round(subtotalTotal * CustomerDiscountRate)
-            : 0m;
-        var customerDescription = customerDiscount > 0
-            ? "Customer discount of 13.5% applied to the booking subtotal."
-            : hasCustomerCode
-                ? "Customer code accepted, but the subtotal must be above R15,000 for a discount."
-                : "No discount code supplied.";
-        var customerLines = baseLines
-            .Select(line => new TravelQuoteLine(
-                line.Sector,
-                line.HotelCategory,
-                booking.Travelers.Count,
-                line.UnitPrice,
-                line.Subtotal,
-                0m,
-                0m,
-                line.Subtotal))
-            .ToArray();
+        var subtotalTotal = Round(lines.Sum(line => line.Subtotal));
+        var discountTotal = Round(lines.Sum(line => line.DiscountAmount));
+        var total = Round(lines.Sum(line => line.Total));
+        var description = corporateCodeCount > 0 && customerCodeCount > 0
+            ? "Individual discounts applied by traveler; corporate discounts take precedence and are not stacked with customer discounts."
+            : corporateCodeCount > 0
+                ? "Corporate sector discounts applied only to travelers with a valid corporate code."
+                : customerDiscountCount > 0
+                    ? "Customer discounts of 13.5% applied to eligible traveler subtotals above R15,000."
+                    : customerCodeCount > 0
+                        ? "Customer codes accepted, but no traveler subtotal is above R15,000."
+                        : "No discount codes supplied.";
 
         return new TravelQuote(
             booking.Travelers,
-            customerLines,
+            lines,
             subtotalTotal,
-            customerDiscount,
-            Round(subtotalTotal - customerDiscount),
-            customerDescription);
+            discountTotal,
+            total,
+            description);
     }
 
     private static IReadOnlyDictionary<TravelSector, decimal> CorporateDiscountRates() =>

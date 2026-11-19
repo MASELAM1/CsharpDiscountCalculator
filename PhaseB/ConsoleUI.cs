@@ -84,7 +84,11 @@ public static class ConsoleUI
                     var firstName = Console.ReadLine() ?? string.Empty;
                     Console.Write($"Traveler {index + 1} last name: ");
                     var lastName = Console.ReadLine() ?? string.Empty;
-                    travelers.Add(new Traveler(firstName, lastName));
+                    Console.Write($"Traveler {index + 1} corporate code (optional, 111ZAA): ");
+                    var corporateCode = Console.ReadLine();
+                    Console.Write($"Traveler {index + 1} customer code (optional, three letters followed by 333): ");
+                    var customerCode = Console.ReadLine();
+                    travelers.Add(new Traveler(firstName, lastName, corporateCode, customerCode));
                 }
 
                 Console.Write("Sectors (Hotel, Car, Flight, Parking; comma-separated): ");
@@ -96,12 +100,8 @@ public static class ConsoleUI
                     hotelCategory = ParseHotelCategory(Console.ReadLine());
                 }
 
-                Console.Write("Corporate code (optional, 111ZAA): ");
-                var corporateCode = Console.ReadLine();
-                Console.Write("Customer code (optional, three letters followed by 333): ");
-                var customerCode = Console.ReadLine();
                 var quote = quoteService.Calculate(
-                    new TravelBooking(travelers, sectors, hotelCategory, corporateCode, customerCode));
+                    new TravelBooking(travelers, sectors, hotelCategory));
                 DisplayQuote(quote);
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
@@ -158,16 +158,17 @@ public static class ConsoleUI
         Console.WriteLine();
         Console.WriteLine("Travelers: " + string.Join(", ", quote.Travelers.Select(
             traveler => $"{traveler.FirstName} {traveler.LastName}")));
-        Console.WriteLine($"{"Sector",-24}{"Travelers",-12}{"Unit price",-14}{"Subtotal",-14}{"Discount",-14}{"Total",-14}");
-        Console.WriteLine(new string('-', 92));
+        Console.WriteLine($"{"Traveler",-24}{"Sector",-20}{"Unit price",-14}{"Subtotal",-14}{"Discount",-14}{"Total",-14}");
+        Console.WriteLine(new string('-', 100));
 
         foreach (var line in quote.Lines)
         {
             var sectorName = line.Sector == TravelSector.Hotel
                 ? $"Hotel ({line.HotelCategory!.Value.ToDisplayName()})"
                 : line.Sector.ToString();
+            var travelerName = $"{line.Traveler.FirstName} {line.Traveler.LastName}";
             Console.WriteLine(
-                $"{sectorName,-24}{line.TravelerCount,-12}" +
+                $"{travelerName,-24}{sectorName,-20}" +
                 $"R{FormatPrice(line.UnitPrice),-13}" +
                 $"R{FormatPrice(line.Subtotal),-13}" +
                 $"R{FormatPrice(line.DiscountAmount),-13}" +

@@ -1,9 +1,9 @@
 namespace CsharpDiscountCalculator.PhaseB.Models;
 
 public sealed record TravelQuoteLine(
+    Traveler Traveler,
     TravelSector Sector,
     HotelCategory? HotelCategory,
-    int TravelerCount,
     decimal UnitPrice,
     decimal Subtotal,
     decimal DiscountRate,

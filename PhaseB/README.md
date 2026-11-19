@@ -47,16 +47,19 @@ more than the previous one. Other sector prices are:
 
 - Corporate code `111ZAA` applies sector discounts: Flight 10%, Hotel 11%,
   Car 8%, and Parking 6.7%.
+- Each traveler can enter a corporate code, a customer code, or neither.
+- A corporate code `111ZAA` applies sector discounts only to the traveler who
+  entered it: Flight 10%, Hotel 11%, Car 8%, and Parking 6.7%.
 - A customer code must contain three letters followed by `333` (for example,
-  `ABC333`). A valid customer code gives 13.5% off the combined booking
-  subtotal only when that subtotal is **above** R15,000.
-- The customer threshold uses the pre-discount subtotal. Exactly R15,000 does
-  not qualify.
-- Corporate discounts take precedence if both valid codes are entered; the
-  discounts are not stacked.
-- All amounts are rounded to two decimal places. Corporate discounts are
-  calculated per selected sector; customer discounts are calculated once for
-  the combined booking subtotal.
+  `ABC333`). A valid customer code gives that traveler 13.5% off their
+  pre-discount subtotal only when it is **above** R15,000. Exactly R15,000
+  does not qualify.
+- Corporate discounts take precedence for that traveler if both valid codes
+  are entered; the discounts are not stacked. Other travelers' codes and
+  discounts are calculated independently.
+- All amounts are rounded to two decimal places. The quote shows each
+  traveler's selected sectors and discounts separately, then sums them into
+  the booking totals.
 
 Run the PhaseB tests with:
 
