@@ -3,4 +3,8 @@
     <Project Path="tests/CsharpDiscountCalculator.Tests.csproj" />
   </Folder>
   <Project Path="CsharpDiscountCalculator.csproj" />
+  <Folder Name="/PhaseB/">
+    <Project Path="PhaseB/CsharpDiscountCalculator.PhaseB.csproj" />
+    <Project Path="PhaseB/tests/CsharpDiscountCalculator.PhaseB.Tests.csproj" />
+  </Folder>
 </Solution>
