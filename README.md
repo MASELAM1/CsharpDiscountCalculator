@@ -9,19 +9,26 @@ apply the same rules, and display results sorted by discounted price.
 - Prices at or above R50 receive 25% off.
 - Prices at or below R20 receive no discount.
 
+## Build
+
+```bash
+dotnet build CsharpDiscountCalculator.slnx
+```
+
 ## Run
 
 ```bash
 dotnet run --project CsharpDiscountCalculator.csproj
 ```
 
-Choose **Terminal** to use the existing interactive terminal interface, or
-**Browser** to start a local web interface and open it in your default browser.
-If the browser does not open automatically, the app prints the local URL to
-open manually. Stop the browser server with Ctrl+C.
+Choose **Terminal** to use the interactive terminal interface, or **Browser**
+to start the local web server and open the form in your default browser. The
+server listens only on this computer (`127.0.0.1`) using an available port. If
+the browser does not open automatically, the app prints the URL to open
+manually. Stop the browser server with Ctrl+C.
 
-In either interface, enter values separated by commas or spaces and choose an
-array or linked list. Example input:
+Enter prices separated by commas or spaces and choose an array or linked list.
+Example input:
 
 ```text
 12.30, 33.89, 56.10, 9, 67.50
@@ -44,7 +51,8 @@ The application starts in `Program.cs`, which calls `ConsoleUI.RunAsync(args)`.
      browser interface, or exit.
    - The terminal interface preserves the array/linked-list selection and
      prompts for another calculation. The browser interface accepts input on a
-     local web page and displays results there.
+     local web page, submits it to the local web server, and displays results
+     there.
 
 2. **Parsing**
    - `DiscountCalculator.ParsePrices` splits the input into individual values,
@@ -60,6 +68,9 @@ The application starts in `Program.cs`, which calls `ConsoleUI.RunAsync(args)`.
    - `Calculate(decimal)` applies the discount rules and creates a
      `DiscountResult` containing the original price, discounted price, and
      discount amount.
+   - In browser mode, `BrowserUI` handles the page request, validates the
+     collection choice, and uses the same parser and calculator as the
+     terminal interface.
 
 4. **Sorting and output**
    - The collection overloads sort results by discounted price in ascending
