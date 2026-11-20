@@ -45,6 +45,8 @@ selectors. It is not a live schedule or a guarantee of current airline service.
 The airport-to-country mapping is maintained in
 `Services/AirportCodeCatalog.cs`, and domestic route pairs are maintained in
 `Services/DomesticFlightRouteCatalog.cs`.
+The browser displays route-country flags beside the trip type and quote
+classification. Flag images load from FlagCDN and require an internet connection.
 
 ## Demo prices
 

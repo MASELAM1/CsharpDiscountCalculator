@@ -218,6 +218,10 @@ public static class BrowserUI
                 body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #222; }
                 h1 { margin-bottom: .4rem; }
                 .hint { color: #555; }
+                .classification-label { align-items: center; display: flex; gap: .65rem; margin: 1rem 0 .4rem; }
+                .classification-label label { margin: 0; }
+                .classification-flags { align-items: center; display: inline-flex; gap: .35rem; }
+                .country-flag { border: 1px solid #d5d9df; border-radius: 2px; height: 20px; object-fit: cover; width: 30px; }
                 form, .quote { background: #f7f8fa; border: 1px solid #d5d9df; border-radius: 8px; padding: 1.2rem; }
                 label { display: block; font-weight: 600; margin: 1rem 0 .4rem; }
                 input, select, button { font: inherit; padding: .6rem; }
@@ -382,8 +386,9 @@ public static class BrowserUI
                 .Append(HtmlEncoder.Default.Encode(string.Join(", ", quote.Travelers.Select(
                     traveler => $"{traveler.FirstName} {traveler.LastName}"))))
                 .Append("</p><p>Classification: ")
-                .Append(HtmlEncoder.Default.Encode(quote.Classification.ToDisplayName()))
-                .Append("</p>");
+                .Append(HtmlEncoder.Default.Encode(quote.Classification.ToDisplayName()));
+            AppendCountryFlags(html, quote.Itinerary);
+            html.Append("</p>");
             if (quote.FlightCompany is { } quoteFlightCompany)
             {
                 html.Append("<p>Flight company: ")
@@ -448,6 +453,27 @@ public static class BrowserUI
                   const originAirport = document.getElementById('originAirportCode');
                   const connectionAirport = document.getElementById('connectionAirportCode');
                   const destinationAirport = document.getElementById('destinationAirportCode');
+                  const classificationFlags = document.getElementById('classification-flags');
+
+                  function updateClassificationFlags() {
+                    classificationFlags.replaceChildren();
+                    const countries = [originAirport.selectedOptions[0], destinationAirport.selectedOptions[0]]
+                      .filter(option => option?.value)
+                      .map(option => ({ code: option.dataset.country, name: option.dataset.countryName }))
+                      .filter((country, index, values) =>
+                        values.findIndex(value => value.code === country.code) === index);
+
+                    for (const country of countries) {
+                      const flag = document.createElement('img');
+                      flag.className = 'country-flag';
+                      flag.src = 'https://flagcdn.com/w40/' + country.code.toLowerCase() + '.png';
+                      flag.alt = country.name + ' flag';
+                      flag.title = country.name;
+                      flag.width = 30;
+                      flag.height = 20;
+                      classificationFlags.appendChild(flag);
+                    }
+                  }
 
                   function updateAirportOptions() {
                     const selectedType = travelClassification.value;
@@ -491,6 +517,7 @@ public static class BrowserUI
                           : sameCountry || bothRegional;
                     }
                     if (destinationAirport.selectedOptions[0]?.hidden) destinationAirport.value = '';
+                    updateClassificationFlags();
                   }
 
                   function updateFlightCompany() {
@@ -579,6 +606,8 @@ public static class BrowserUI
                 .Append(airport.Code)
                 .Append("\" data-country=\"")
                 .Append(airport.CountryCode)
+                .Append("\" data-country-name=\"")
+                .Append(HtmlEncoder.Default.Encode(airport.CountryName))
                 .Append("\" data-regional=\"")
                 .Append(TravelClassificationService.IsRegionalCountry(airport.CountryCode) ? "true" : "false")
                 .Append('"')
@@ -593,7 +622,8 @@ public static class BrowserUI
 
     private static void AppendTravelClassificationSelect(StringBuilder html, string selectedClassification)
     {
-        html.Append("<label for=\"travelClassification\">Trip type</label>")
+        html.Append("<div class=\"classification-label\"><label for=\"travelClassification\">Trip type</label>")
+            .Append("<span id=\"classification-flags\" class=\"classification-flags\" aria-live=\"polite\"></span></div>")
             .Append("<select id=\"travelClassification\" name=\"travelClassification\" required>");
 
         foreach (var classification in Enum.GetValues<TravelClassification>())
@@ -611,6 +641,29 @@ public static class BrowserUI
         }
 
         html.Append("</select>");
+    }
+
+    private static void AppendCountryFlags(StringBuilder html, TravelItinerary itinerary)
+    {
+        var origin = AirportCodeCatalog.GetAirport(itinerary.OriginAirportCode);
+        var destination = AirportCodeCatalog.GetAirport(itinerary.DestinationAirportCode);
+        var countries = origin.CountryCode == destination.CountryCode
+            ? [origin]
+            : new[] { origin, destination };
+
+        html.Append("<span class=\"classification-flags\" aria-label=\"Route country flags\">");
+        foreach (var airport in countries)
+        {
+            html.Append("<img class=\"country-flag\" src=\"https://flagcdn.com/w40/")
+                .Append(airport.CountryCode.ToLowerInvariant())
+                .Append(".png\" width=\"30\" height=\"20\" alt=\"")
+                .Append(HtmlEncoder.Default.Encode($"{airport.CountryName} flag"))
+                .Append("\" title=\"")
+                .Append(HtmlEncoder.Default.Encode(airport.CountryName))
+                .Append("\">");
+        }
+
+        html.Append("</span>");
     }
 
     private static void AppendFlightCompanySelect(
