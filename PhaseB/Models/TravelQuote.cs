@@ -9,4 +9,5 @@ public sealed record TravelQuote(
     string DiscountDescription,
     TravelItinerary Itinerary,
     TravelClassification Classification,
-    FlightCompany? FlightCompany);
+    FlightCompany? FlightCompany,
+    FlightCompany? ReturnFlightCompany = null);

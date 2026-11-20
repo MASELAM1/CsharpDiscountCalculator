@@ -26,6 +26,14 @@ public sealed class TravelQuoteService
                 "Unknown flight company.");
         }
 
+        if (booking.ReturnFlightCompany is { } selectedReturnCompany && !Enum.IsDefined(selectedReturnCompany))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(booking.ReturnFlightCompany),
+                selectedReturnCompany,
+                "Unknown return flight company.");
+        }
+
         ArgumentNullException.ThrowIfNull(booking.SelectedSectors);
         var includesFlight = booking.SelectedSectors.Contains(TravelSector.Flight);
         ValidateReturnFlight(booking.Itinerary, includesFlight);
@@ -39,6 +47,17 @@ public sealed class TravelQuoteService
         {
             throw new ArgumentException("A flight company can only be selected for a domestic flight.");
         }
+
+        var includesReturnFlight = booking.Itinerary.ReturnDepartureLocalDateTime is not null;
+        if (booking.ReturnFlightCompany is not null
+            && (!includesReturnFlight || classification != TravelClassification.Domestic))
+        {
+            throw new ArgumentException("A return flight company can only be selected for a domestic return flight.");
+        }
+
+        var returnFlightCompany = includesReturnFlight && classification == TravelClassification.Domestic
+            ? booking.ReturnFlightCompany ?? booking.FlightCompany
+            : null;
 
         ArgumentNullException.ThrowIfNull(booking.Travelers);
         if (booking.Travelers.Count == 0)
@@ -116,7 +135,7 @@ public sealed class TravelQuoteService
                         unitPrice += _priceCatalog.GetPricePerTraveler(
                             sector,
                             travelClassification: classification,
-                            flightCompany: booking.FlightCompany,
+                            flightCompany: returnFlightCompany,
                             departureLocalDateTime: returnDeparture);
                     }
 
@@ -185,7 +204,8 @@ public sealed class TravelQuoteService
             description,
             booking.Itinerary,
             classification,
-            booking.FlightCompany);
+            booking.FlightCompany,
+            returnFlightCompany);
     }
 
     private static IReadOnlyDictionary<TravelSector, decimal> CorporateDiscountRates() =>

@@ -5,4 +5,5 @@ public sealed record TravelBooking(
     IReadOnlyList<TravelSector> SelectedSectors,
     HotelCategory? HotelCategory,
     TravelItinerary Itinerary,
-    FlightCompany? FlightCompany = null);
+    FlightCompany? FlightCompany = null,
+    FlightCompany? ReturnFlightCompany = null);

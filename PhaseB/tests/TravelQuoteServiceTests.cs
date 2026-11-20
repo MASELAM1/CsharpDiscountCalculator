@@ -301,7 +301,43 @@ public class TravelQuoteServiceTests
             CreateBooking(1, [TravelSector.Flight], itinerary: itinerary, flightCompany: FlightCompany.SAA));
 
         Assert.Equal(7_120m, quote.Lines.Single().UnitPrice);
+        Assert.Equal(FlightCompany.SAA, quote.ReturnFlightCompany);
         Assert.Equal(itinerary, quote.Itinerary);
+    }
+
+    [Fact]
+    public void Calculate_UsesSelectedCompanyAndDepartureTimeForReturnFlight()
+    {
+        var itinerary = TestItinerary() with
+        {
+            ReturnDepartureLocalDateTime = new DateTime(2026, 1, 2, 12, 0, 0),
+            ReturnArrivalLocalDateTime = new DateTime(2026, 1, 2, 14, 0, 0)
+        };
+
+        var quote = new TravelQuoteService().Calculate(
+            CreateBooking(
+                1,
+                [TravelSector.Flight],
+                itinerary: itinerary,
+                flightCompany: FlightCompany.SAA,
+                returnFlightCompany: FlightCompany.Airlink));
+
+        Assert.Equal(8_410m, quote.Lines.Single().UnitPrice);
+        Assert.Equal(FlightCompany.SAA, quote.FlightCompany);
+        Assert.Equal(FlightCompany.Airlink, quote.ReturnFlightCompany);
+    }
+
+    [Fact]
+    public void Calculate_RejectsReturnCompanyWithoutReturnFlight()
+    {
+        var booking = CreateBooking(
+            1,
+            [TravelSector.Flight],
+            itinerary: TestItinerary(),
+            flightCompany: FlightCompany.SAA,
+            returnFlightCompany: FlightCompany.Airlink);
+
+        Assert.Throws<ArgumentException>(() => new TravelQuoteService().Calculate(booking));
     }
 
     [Fact]
@@ -464,7 +500,8 @@ public class TravelQuoteServiceTests
         string? customerCode = null,
         HotelCategory? hotelCategory = null,
         TravelItinerary? itinerary = null,
-        FlightCompany? flightCompany = null)
+        FlightCompany? flightCompany = null,
+        FlightCompany? returnFlightCompany = null)
     {
         itinerary ??= TestItinerary();
         if (flightCompany is null
@@ -481,7 +518,8 @@ public class TravelQuoteServiceTests
             sectors,
             hotelCategory,
             itinerary,
-            flightCompany);
+            flightCompany,
+            returnFlightCompany);
     }
 
     private static TravelItinerary TestItinerary(

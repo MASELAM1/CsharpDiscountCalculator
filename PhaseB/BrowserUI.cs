@@ -47,9 +47,11 @@ public static class BrowserUI
             var returnDepartureDateTimeInput = form["returnDepartureDateTime"].ToString();
             var returnArrivalDateTimeInput = form["returnArrivalDateTime"].ToString();
             var flightCompanyInput = form["flightCompany"].ToString();
+            var returnFlightCompanyInput = form["returnFlightCompany"].ToString();
             var selectedSectors = new List<TravelSector>();
             HotelCategory? hotelCategory = null;
             FlightCompany? flightCompany = null;
+            FlightCompany? returnFlightCompany = null;
             TravelItinerary? itinerary = null;
             TravelQuote? quote = null;
             string? error = null;
@@ -165,6 +167,17 @@ public static class BrowserUI
                     flightCompany = parsedFlightCompany;
                 }
 
+                if (!string.IsNullOrWhiteSpace(returnFlightCompanyInput))
+                {
+                    if (!Enum.TryParse<FlightCompany>(returnFlightCompanyInput, true, out var parsedReturnFlightCompany)
+                        || !Enum.IsDefined(parsedReturnFlightCompany))
+                    {
+                        throw new FormatException("Choose SAA, FlySafair, or Airlink for a domestic return flight.");
+                    }
+
+                    returnFlightCompany = parsedReturnFlightCompany;
+                }
+
                 if (!string.IsNullOrWhiteSpace(hotelCategoryInput))
                 {
                     if (!Enum.TryParse<HotelCategory>(hotelCategoryInput, true, out var parsedCategory)
@@ -177,7 +190,13 @@ public static class BrowserUI
                 }
 
                 quote = new TravelQuoteService().Calculate(
-                    new TravelBooking(travelers, selectedSectors, hotelCategory, itinerary, flightCompany));
+                    new TravelBooking(
+                        travelers,
+                        selectedSectors,
+                        hotelCategory,
+                        itinerary,
+                        flightCompany,
+                        returnFlightCompany));
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
             {
@@ -200,7 +219,8 @@ public static class BrowserUI
                 flightCompanyInput,
                 returnFlightInput,
                 returnDepartureDateTimeInput,
-                returnArrivalDateTimeInput));
+                returnArrivalDateTimeInput,
+                returnFlightCompanyInput));
         });
 
         await app.StartAsync();
@@ -240,7 +260,8 @@ public static class BrowserUI
         string flightCompanyInput = "",
         bool returnFlightInput = false,
         string returnDepartureDateTimeInput = "",
-        string returnArrivalDateTimeInput = "")
+        string returnArrivalDateTimeInput = "",
+        string returnFlightCompanyInput = "")
     {
         var catalog = new TravelPriceCatalog();
         var formTravelers = travelers ?? [new Traveler(string.Empty, string.Empty)];
@@ -394,7 +415,11 @@ public static class BrowserUI
                     flightSelected,
                     returnFlightInput,
                     returnDepartureDateTimeInput,
-                    returnArrivalDateTimeInput);
+                    returnArrivalDateTimeInput,
+                    returnFlightCompanyInput,
+                    travelClassificationInput.Equals(
+                        nameof(TravelClassification.Domestic),
+                        StringComparison.OrdinalIgnoreCase));
             }
 
             html.Append("</div>");
@@ -446,8 +471,15 @@ public static class BrowserUI
             html.Append("</p>");
             if (quote.FlightCompany is { } quoteFlightCompany)
             {
-                html.Append("<p>Flight company: ")
+                html.Append("<p>Outbound flight company: ")
                     .Append(HtmlEncoder.Default.Encode(quoteFlightCompany.ToString()))
+                    .Append("</p>");
+            }
+
+            if (quote.ReturnFlightCompany is { } quoteReturnFlightCompany)
+            {
+                html.Append("<p>Return flight company: ")
+                    .Append(HtmlEncoder.Default.Encode(quoteReturnFlightCompany.ToString()))
                     .Append("</p>");
             }
 
@@ -535,6 +567,8 @@ public static class BrowserUI
                   const returnFlightField = document.getElementById('return-flight-field');
                   const returnFlight = document.getElementById('returnFlight');
                   const returnFlightTimes = document.getElementById('return-flight-times');
+                  const returnFlightCompanyField = document.getElementById('return-flight-company-field');
+                  const returnFlightCompany = document.getElementById('returnFlightCompany');
                   const returnDeparture = document.getElementById('return-departure-date-time');
                   const returnArrival = document.getElementById('return-arrival-date-time');
 
@@ -620,6 +654,10 @@ public static class BrowserUI
                     returnDeparture.required = returnSelected;
                     returnArrival.disabled = !returnSelected;
                     returnArrival.required = returnSelected;
+                    const returnCompanyNeeded = returnSelected && travelClassification.value === 'Domestic';
+                    returnFlightCompanyField.hidden = !returnCompanyNeeded;
+                    returnFlightCompany.disabled = !returnCompanyNeeded;
+                    returnFlightCompany.required = returnCompanyNeeded;
                   }
 
                   travelClassification.addEventListener('change', updateAirportOptions);
@@ -627,6 +665,7 @@ public static class BrowserUI
                   connectionAirport.addEventListener('change', updateAirportOptions);
                   destinationAirport.addEventListener('change', updateAirportOptions);
                   travelClassification.addEventListener('change', updateFlightCompany);
+                  travelClassification.addEventListener('change', updateReturnFlight);
                   flightCheckbox.addEventListener('change', updateFlightCompany);
                   flightCheckbox.addEventListener('change', updateReturnFlight);
                   returnFlight.addEventListener('change', updateReturnFlight);
@@ -773,7 +812,7 @@ public static class BrowserUI
         var isEnabled = isDomestic && flightSelected;
         html.Append("<div id=\"flight-company-field\"")
             .Append(isEnabled ? string.Empty : " hidden")
-            .Append("><label for=\"flightCompany\">Domestic flight company</label>")
+            .Append("><label for=\"flightCompany\">Domestic outbound flight company</label>")
             .Append("<select id=\"flightCompany\" name=\"flightCompany\"")
             .Append(isEnabled ? " required" : " disabled")
             .Append("><option value=\"\">Choose a company</option>");
@@ -799,7 +838,9 @@ public static class BrowserUI
         bool flightSelected,
         bool returnFlightSelected,
         string returnDepartureDateTime,
-        string returnArrivalDateTime)
+        string returnArrivalDateTime,
+        string returnFlightCompany,
+        bool isDomestic)
     {
         html.Append("<div id=\"return-flight-field\"")
             .Append(flightSelected ? string.Empty : " hidden")
@@ -816,7 +857,40 @@ public static class BrowserUI
             .Append(flightSelected && returnFlightSelected ? " required" : " disabled")
             .Append(" value=\"")
             .Append(HtmlEncoder.Default.Encode(returnArrivalDateTime))
-            .Append("\"></div></div>");
+            .Append("\">");
+        AppendReturnFlightCompanySelect(
+            html,
+            returnFlightCompany,
+            flightSelected && returnFlightSelected && isDomestic);
+        html.Append("</div></div>");
+    }
+
+    private static void AppendReturnFlightCompanySelect(
+        StringBuilder html,
+        string selectedCompany,
+        bool isEnabled)
+    {
+        html.Append("<div id=\"return-flight-company-field\"")
+            .Append(isEnabled ? string.Empty : " hidden")
+            .Append("><label for=\"returnFlightCompany\">Domestic return flight company</label>")
+            .Append("<select id=\"returnFlightCompany\" name=\"returnFlightCompany\"")
+            .Append(isEnabled ? " required" : " disabled")
+            .Append("><option value=\"\">Choose a company</option>");
+
+        foreach (var company in Enum.GetValues<FlightCompany>())
+        {
+            html.Append("<option value=\"")
+                .Append(company)
+                .Append('"')
+                .Append(string.Equals(company.ToString(), selectedCompany, StringComparison.OrdinalIgnoreCase)
+                    ? " selected"
+                    : string.Empty)
+                .Append('>')
+                .Append(company)
+                .Append("</option>");
+        }
+
+        html.Append("</select></div>");
     }
 
     private static void AppendDomesticRouteSelect(

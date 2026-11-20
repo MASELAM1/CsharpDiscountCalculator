@@ -143,12 +143,19 @@ public static class ConsoleUI
                 }
 
                 FlightCompany? flightCompany = null;
+                FlightCompany? returnFlightCompany = null;
                 if (sectors.Contains(TravelSector.Flight)
                     && travelClassification == TravelClassification.Domestic)
                 {
-                    Console.WriteLine("Domestic flight company: 1. SAA  2. FlySafair  3. Airlink");
-                    Console.Write("Flight company: ");
+                    Console.WriteLine("Domestic outbound flight company: 1. SAA  2. FlySafair  3. Airlink");
+                    Console.Write("Outbound flight company: ");
                     flightCompany = ParseFlightCompany(Console.ReadLine());
+                    if (itinerary.ReturnDepartureLocalDateTime is not null)
+                    {
+                        Console.WriteLine("Domestic return flight company: 1. SAA  2. FlySafair  3. Airlink");
+                        Console.Write("Return flight company: ");
+                        returnFlightCompany = ParseFlightCompany(Console.ReadLine());
+                    }
                 }
 
                 HotelCategory? hotelCategory = null;
@@ -159,7 +166,13 @@ public static class ConsoleUI
                 }
 
                 var quote = quoteService.Calculate(
-                    new TravelBooking(travelers, sectors, hotelCategory, itinerary, flightCompany));
+                    new TravelBooking(
+                        travelers,
+                        sectors,
+                        hotelCategory,
+                        itinerary,
+                        flightCompany,
+                        returnFlightCompany));
                 DisplayQuote(quote);
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
@@ -255,7 +268,12 @@ public static class ConsoleUI
         Console.WriteLine($"Classification: {quote.Classification.ToDisplayName()}");
         if (quote.FlightCompany is { } flightCompany)
         {
-            Console.WriteLine($"Flight company: {flightCompany}");
+            Console.WriteLine($"Outbound flight company: {flightCompany}");
+        }
+
+        if (quote.ReturnFlightCompany is { } returnFlightCompany)
+        {
+            Console.WriteLine($"Return flight company: {returnFlightCompany}");
         }
 
         var connection = string.IsNullOrWhiteSpace(quote.Itinerary.ConnectionAirportCode)
