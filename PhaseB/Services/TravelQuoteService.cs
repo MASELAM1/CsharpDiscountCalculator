@@ -18,6 +18,25 @@ public sealed class TravelQuoteService
         ArgumentNullException.ThrowIfNull(booking);
         ArgumentNullException.ThrowIfNull(booking.Itinerary);
         var classification = TravelClassificationService.Classify(booking.Itinerary);
+        if (booking.FlightCompany is { } selectedCompany && !Enum.IsDefined(selectedCompany))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(booking.FlightCompany),
+                selectedCompany,
+                "Unknown flight company.");
+        }
+
+        var includesFlight = booking.SelectedSectors?.Contains(TravelSector.Flight) == true;
+        if (includesFlight && classification == TravelClassification.Domestic && booking.FlightCompany is null)
+        {
+            throw new ArgumentException("Choose a flight company for a domestic flight.");
+        }
+
+        if (booking.FlightCompany is not null
+            && (!includesFlight || classification != TravelClassification.Domestic))
+        {
+            throw new ArgumentException("A flight company can only be selected for a domestic flight.");
+        }
 
         ArgumentNullException.ThrowIfNull(booking.Travelers);
         if (booking.Travelers.Count == 0)
@@ -84,7 +103,12 @@ public sealed class TravelQuoteService
                 .Select(sector =>
                 {
                     var hotelCategory = sector == TravelSector.Hotel ? booking.HotelCategory : null;
-                    var unitPrice = _priceCatalog.GetPricePerTraveler(sector, hotelCategory);
+                    var unitPrice = _priceCatalog.GetPricePerTraveler(
+                        sector,
+                        hotelCategory,
+                        sector == TravelSector.Flight ? classification : null,
+                        sector == TravelSector.Flight ? booking.FlightCompany : null,
+                        sector == TravelSector.Flight ? booking.Itinerary.DepartureLocalDateTime : null);
                     return (Sector: sector, HotelCategory: hotelCategory, UnitPrice: unitPrice, Subtotal: Round(unitPrice));
                 })
                 .ToArray();
@@ -149,7 +173,8 @@ public sealed class TravelQuoteService
             total,
             description,
             booking.Itinerary,
-            classification);
+            classification,
+            booking.FlightCompany);
     }
 
     private static IReadOnlyDictionary<TravelSector, decimal> CorporateDiscountRates() =>

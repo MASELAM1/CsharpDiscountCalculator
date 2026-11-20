@@ -37,12 +37,16 @@ public static class BrowserUI
             var customerCodes = form["customerCodes"].ToArray();
             var travelers = new List<Traveler>();
             var hotelCategoryInput = form["hotelCategory"].ToString();
+            var travelClassificationInput = form["travelClassification"].ToString();
             var originAirportCodeInput = form["originAirportCode"].ToString();
+            var connectionAirportCodeInput = form["connectionAirportCode"].ToString();
             var destinationAirportCodeInput = form["destinationAirportCode"].ToString();
             var departureDateTimeInput = form["departureDateTime"].ToString();
             var arrivalDateTimeInput = form["arrivalDateTime"].ToString();
+            var flightCompanyInput = form["flightCompany"].ToString();
             var selectedSectors = new List<TravelSector>();
             HotelCategory? hotelCategory = null;
+            FlightCompany? flightCompany = null;
             TravelItinerary? itinerary = null;
             TravelQuote? quote = null;
             string? error = null;
@@ -90,11 +94,22 @@ public static class BrowserUI
                     throw new FormatException("Enter a valid arrival date and time.");
                 }
 
+                if (!Enum.TryParse<TravelClassification>(
+                    travelClassificationInput,
+                    true,
+                    out var selectedClassification)
+                    || !Enum.IsDefined(selectedClassification))
+                {
+                    throw new FormatException("Choose a supported trip type.");
+                }
+
                 itinerary = new TravelItinerary(
                     originAirportCodeInput,
                     destinationAirportCodeInput,
                     departureDateTime,
-                    arrivalDateTime);
+                    arrivalDateTime,
+                    connectionAirportCodeInput);
+                TravelClassificationService.ValidateSelection(selectedClassification, itinerary);
 
                 foreach (var sectorValue in form["sectors"])
                 {
@@ -104,6 +119,17 @@ public static class BrowserUI
                     }
 
                     selectedSectors.Add(sector);
+                }
+
+                if (!string.IsNullOrWhiteSpace(flightCompanyInput))
+                {
+                    if (!Enum.TryParse<FlightCompany>(flightCompanyInput, true, out var parsedFlightCompany)
+                        || !Enum.IsDefined(parsedFlightCompany))
+                    {
+                        throw new FormatException("Choose SAA, FlySafair, or Airlink for a domestic flight.");
+                    }
+
+                    flightCompany = parsedFlightCompany;
                 }
 
                 if (!string.IsNullOrWhiteSpace(hotelCategoryInput))
@@ -118,7 +144,7 @@ public static class BrowserUI
                 }
 
                 quote = new TravelQuoteService().Calculate(
-                    new TravelBooking(travelers, selectedSectors, hotelCategory, itinerary));
+                    new TravelBooking(travelers, selectedSectors, hotelCategory, itinerary, flightCompany));
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
             {
@@ -132,10 +158,13 @@ public static class BrowserUI
                 hotelCategoryInput,
                 quote,
                 error,
+                travelClassificationInput,
                 originAirportCodeInput,
+                connectionAirportCodeInput,
                 destinationAirportCodeInput,
                 departureDateTimeInput,
-                arrivalDateTimeInput));
+                arrivalDateTimeInput,
+                flightCompanyInput));
         });
 
         await app.StartAsync();
@@ -166,14 +195,18 @@ public static class BrowserUI
         string hotelCategoryInput = "",
         TravelQuote? quote = null,
         string? error = null,
+        string travelClassificationInput = nameof(TravelClassification.Domestic),
         string originAirportCodeInput = "",
+        string connectionAirportCodeInput = "",
         string destinationAirportCodeInput = "",
         string departureDateTimeInput = "",
-        string arrivalDateTimeInput = "")
+        string arrivalDateTimeInput = "",
+        string flightCompanyInput = "")
     {
         var catalog = new TravelPriceCatalog();
         var formTravelers = travelers ?? [new Traveler(string.Empty, string.Empty)];
         var hotelSelected = selectedSectors?.Contains(TravelSector.Hotel) == true;
+        var flightSelected = selectedSectors?.Contains(TravelSector.Flight) == true;
         var html = new StringBuilder("""
             <!doctype html>
             <html lang="en">
@@ -243,14 +276,27 @@ public static class BrowserUI
                 .Append("\" placeholder=\"ABC333\"><button type=\"button\" class=\"remove-traveler\">Remove traveler</button></fieldset>");
         }
 
-        html.Append("<fieldset><legend>Flight itinerary</legend><p class=\"hint\">Classification uses the countries of the selected airports. Enter local date and time for each airport.</p>");
+        html.Append("<fieldset><legend>Flight itinerary</legend><p class=\"hint\">Choose a trip type to filter the airport selectors. Domestic + International represents a domestic leg followed by an international leg. Route options are a static list and do not provide live schedules.</p>");
+        AppendTravelClassificationSelect(html, travelClassificationInput);
+        html.Append("<div id=\"domestic-route-field\">");
+        AppendDomesticRouteSelect(html, originAirportCodeInput, destinationAirportCodeInput);
+        html.Append("</div>");
         AppendAirportSelect(html, "originAirportCode", "Origin airport", originAirportCodeInput);
+        html.Append("<div id=\"connection-airport-field\">");
+        AppendAirportSelect(html, "connectionAirportCode", "Domestic connection airport", connectionAirportCodeInput);
+        html.Append("</div>");
         AppendAirportSelect(html, "destinationAirportCode", "Destination airport", destinationAirportCodeInput);
         html.Append("<label for=\"departure-date-time\">Departure date and local time</label><input id=\"departure-date-time\" name=\"departureDateTime\" type=\"datetime-local\" required value=\"")
             .Append(HtmlEncoder.Default.Encode(departureDateTimeInput))
             .Append("\"><label for=\"arrival-date-time\">Arrival date and local time</label><input id=\"arrival-date-time\" name=\"arrivalDateTime\" type=\"datetime-local\" required value=\"")
             .Append(HtmlEncoder.Default.Encode(arrivalDateTimeInput))
-            .Append("\"></fieldset>");
+            .Append("\">");
+        AppendFlightCompanySelect(
+            html,
+            flightCompanyInput,
+            travelClassificationInput.Equals(nameof(TravelClassification.Domestic), StringComparison.OrdinalIgnoreCase),
+            flightSelected);
+        html.Append("</fieldset>");
 
         html.Append("""
                   </div>
@@ -263,6 +309,24 @@ public static class BrowserUI
         foreach (var sector in Enum.GetValues<TravelSector>())
         {
             var checkedAttribute = selectedSectors?.Contains(sector) == true ? " checked" : string.Empty;
+            var priceDescription = sector switch
+            {
+                TravelSector.Hotel => " (choose a category below)",
+                TravelSector.Flight =>
+                    " — Domestic SAA R3,500.00; FlySafair R4,000.00; Airlink R4,790.00"
+                    + " (+R120.00 for departures at/after 12:00)"
+                    + "; Regional R" + FormatPrice(catalog.GetPricePerTraveler(
+                        sector,
+                        travelClassification: TravelClassification.Regional))
+                    + "; International R" + FormatPrice(catalog.GetPricePerTraveler(
+                        sector,
+                        travelClassification: TravelClassification.International))
+                    + "; Domestic + International R" + FormatPrice(catalog.GetPricePerTraveler(
+                        sector,
+                        travelClassification: TravelClassification.DomesticAndInternational))
+                    + " per traveler",
+                _ => " — R" + FormatPrice(catalog.GetPricePerTraveler(sector)) + " per traveler"
+            };
             html.Append("<div class=\"sector\"><input type=\"checkbox\" id=\"sector-")
                 .Append(sector)
                 .Append("\" name=\"sectors\" value=\"")
@@ -273,8 +337,7 @@ public static class BrowserUI
                 .Append(sector)
                 .Append("\">")
                 .Append(sector == TravelSector.Hotel ? "Hotel" : sector.ToString())
-                .Append(sector == TravelSector.Hotel ? " (choose a category below)" : " — R")
-                .Append(sector == TravelSector.Hotel ? string.Empty : FormatPrice(catalog.GetPricePerTraveler(sector)) + " per traveler")
+                .Append(priceDescription)
                 .Append("</label></div>");
         }
 
@@ -319,10 +382,17 @@ public static class BrowserUI
                 .Append(HtmlEncoder.Default.Encode(string.Join(", ", quote.Travelers.Select(
                     traveler => $"{traveler.FirstName} {traveler.LastName}"))))
                 .Append("</p><p>Classification: ")
-                .Append(HtmlEncoder.Default.Encode(quote.Classification.ToString()))
-                .Append("</p><p>Route: ")
-                .Append(HtmlEncoder.Default.Encode(
-                    $"{AirportCodeCatalog.GetAirport(quote.Itinerary.OriginAirportCode).Name} ({quote.Itinerary.OriginAirportCode}) to {AirportCodeCatalog.GetAirport(quote.Itinerary.DestinationAirportCode).Name} ({quote.Itinerary.DestinationAirportCode})"))
+                .Append(HtmlEncoder.Default.Encode(quote.Classification.ToDisplayName()))
+                .Append("</p>");
+            if (quote.FlightCompany is { } quoteFlightCompany)
+            {
+                html.Append("<p>Flight company: ")
+                    .Append(HtmlEncoder.Default.Encode(quoteFlightCompany.ToString()))
+                    .Append("</p>");
+            }
+
+            html.Append("<p>Route: ")
+                .Append(HtmlEncoder.Default.Encode(FormatRoute(quote.Itinerary)))
                 .Append("</p><p>Departure: ")
                 .Append(FormatDateTime(quote.Itinerary.DepartureLocalDateTime))
                 .Append(" (local)</p><p>Arrival: ")
@@ -367,7 +437,85 @@ public static class BrowserUI
                   let nextIndex = container.querySelectorAll('.traveler').length;
                   const addButton = document.getElementById('add-traveler');
                   const hotelCheckbox = document.getElementById('sector-Hotel');
+                  const flightCheckbox = document.getElementById('sector-Flight');
                   const hotelCategory = document.getElementById('hotel-category');
+                  const flightCompanyField = document.getElementById('flight-company-field');
+                  const flightCompany = document.getElementById('flightCompany');
+                  const travelClassification = document.getElementById('travelClassification');
+                  const domesticRouteField = document.getElementById('domestic-route-field');
+                  const connectionAirportField = document.getElementById('connection-airport-field');
+                  const domesticRoute = document.getElementById('domestic-route');
+                  const originAirport = document.getElementById('originAirportCode');
+                  const connectionAirport = document.getElementById('connectionAirportCode');
+                  const destinationAirport = document.getElementById('destinationAirportCode');
+
+                  function updateAirportOptions() {
+                    const selectedType = travelClassification.value;
+                    const isCombined = selectedType === 'DomesticAndInternational';
+                    domesticRouteField.hidden = selectedType !== 'Domestic';
+                    connectionAirportField.hidden = !isCombined;
+                    connectionAirport.disabled = !isCombined;
+                    connectionAirport.required = isCombined;
+
+                    for (const option of originAirport.options) {
+                      option.hidden = Boolean(option.value)
+                        && selectedType === 'Regional'
+                        && option.dataset.regional !== 'true';
+                    }
+                    if (originAirport.selectedOptions[0]?.hidden) originAirport.value = '';
+
+                    const originOption = originAirport.selectedOptions[0];
+                    const originCountry = originOption?.dataset.country;
+                    for (const option of connectionAirport.options) {
+                      option.hidden = Boolean(option.value)
+                        && (!isCombined || !originCountry || option.dataset.country !== originCountry
+                          || option.value === originAirport.value);
+                    }
+                    if (connectionAirport.selectedOptions[0]?.hidden) connectionAirport.value = '';
+
+                    const connectionOption = connectionAirport.selectedOptions[0];
+                    const baseOption = isCombined ? connectionOption : originOption;
+                    for (const option of destinationAirport.options) {
+                      if (!option.value || !baseOption) {
+                        option.hidden = false;
+                        continue;
+                      }
+
+                      const sameCountry = option.dataset.country === baseOption.dataset.country;
+                      const bothRegional = option.dataset.regional === 'true'
+                        && baseOption.dataset.regional === 'true';
+                      option.hidden = selectedType === 'Domestic'
+                        ? !sameCountry || option.value === originAirport.value
+                        : selectedType === 'Regional'
+                          ? !bothRegional || sameCountry
+                          : sameCountry || bothRegional;
+                    }
+                    if (destinationAirport.selectedOptions[0]?.hidden) destinationAirport.value = '';
+                  }
+
+                  function updateFlightCompany() {
+                    const needed = travelClassification.value === 'Domestic' && flightCheckbox.checked;
+                    flightCompanyField.hidden = !needed;
+                    flightCompany.disabled = !needed;
+                    flightCompany.required = needed;
+                  }
+
+                  travelClassification.addEventListener('change', updateAirportOptions);
+                  originAirport.addEventListener('change', updateAirportOptions);
+                  connectionAirport.addEventListener('change', updateAirportOptions);
+                  destinationAirport.addEventListener('change', updateAirportOptions);
+                  travelClassification.addEventListener('change', updateFlightCompany);
+                  flightCheckbox.addEventListener('change', updateFlightCompany);
+
+                  domesticRoute.addEventListener('change', () => {
+                    if (!domesticRoute.value) return;
+                    const [origin, destination] = domesticRoute.value.split('-');
+                    originAirport.value = origin;
+                    destinationAirport.value = destination;
+                    updateAirportOptions();
+                    updateFlightCompany();
+                  });
+                  updateAirportOptions();
 
                   addButton.addEventListener('click', () => {
                     const index = nextIndex++;
@@ -429,6 +577,10 @@ public static class BrowserUI
         {
             html.Append("<option value=\"")
                 .Append(airport.Code)
+                .Append("\" data-country=\"")
+                .Append(airport.CountryCode)
+                .Append("\" data-regional=\"")
+                .Append(TravelClassificationService.IsRegionalCountry(airport.CountryCode) ? "true" : "false")
                 .Append('"')
                 .Append(string.Equals(airport.Code, selectedCode, StringComparison.OrdinalIgnoreCase) ? " selected" : string.Empty)
                 .Append('>')
@@ -437,6 +589,110 @@ public static class BrowserUI
         }
 
         html.Append("</select>");
+    }
+
+    private static void AppendTravelClassificationSelect(StringBuilder html, string selectedClassification)
+    {
+        html.Append("<label for=\"travelClassification\">Trip type</label>")
+            .Append("<select id=\"travelClassification\" name=\"travelClassification\" required>");
+
+        foreach (var classification in Enum.GetValues<TravelClassification>())
+        {
+            html.Append("<option value=\"")
+                .Append(classification)
+                .Append('"')
+                .Append(string.Equals(
+                    classification.ToString(),
+                    selectedClassification,
+                    StringComparison.OrdinalIgnoreCase) ? " selected" : string.Empty)
+                .Append('>')
+                .Append(HtmlEncoder.Default.Encode(classification.ToDisplayName()))
+                .Append("</option>");
+        }
+
+        html.Append("</select>");
+    }
+
+    private static void AppendFlightCompanySelect(
+        StringBuilder html,
+        string selectedCompany,
+        bool isDomestic,
+        bool flightSelected)
+    {
+        var isEnabled = isDomestic && flightSelected;
+        html.Append("<div id=\"flight-company-field\"")
+            .Append(isEnabled ? string.Empty : " hidden")
+            .Append("><label for=\"flightCompany\">Domestic flight company</label>")
+            .Append("<select id=\"flightCompany\" name=\"flightCompany\"")
+            .Append(isEnabled ? " required" : " disabled")
+            .Append("><option value=\"\">Choose a company</option>");
+
+        foreach (var company in Enum.GetValues<FlightCompany>())
+        {
+            html.Append("<option value=\"")
+                .Append(company)
+                .Append('"')
+                .Append(string.Equals(company.ToString(), selectedCompany, StringComparison.OrdinalIgnoreCase)
+                    ? " selected"
+                    : string.Empty)
+                .Append('>')
+                .Append(company)
+                .Append("</option>");
+        }
+
+        html.Append("</select></div>");
+    }
+
+    private static void AppendDomesticRouteSelect(
+        StringBuilder html,
+        string originAirportCode,
+        string destinationAirportCode)
+    {
+        html.Append("<label for=\"domestic-route\">South African domestic route</label>")
+            .Append("<select id=\"domestic-route\"><option value=\"\">Choose a domestic route</option>");
+
+        foreach (var route in DomesticFlightRouteCatalog.SupportedRoutes)
+        {
+            var selectedAttribute = string.Equals(
+                    route.OriginAirportCode,
+                    originAirportCode,
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(
+                    route.DestinationAirportCode,
+                    destinationAirportCode,
+                    StringComparison.OrdinalIgnoreCase)
+                ? " selected"
+                : string.Empty;
+
+            html.Append("<option value=\"")
+                .Append(route.OriginAirportCode)
+                .Append('-')
+                .Append(route.DestinationAirportCode)
+                .Append('"')
+                .Append(selectedAttribute)
+                .Append('>')
+                .Append(HtmlEncoder.Default.Encode(route.DisplayName))
+                .Append("</option>");
+        }
+
+        html.Append("</select>");
+    }
+
+    private static string FormatRoute(TravelItinerary itinerary)
+    {
+        static string FormatAirport(string code)
+        {
+            var airport = AirportCodeCatalog.GetAirport(code);
+            return $"{airport.Name} ({airport.Code})";
+        }
+
+        var route = $"{FormatAirport(itinerary.OriginAirportCode)} to ";
+        if (!string.IsNullOrWhiteSpace(itinerary.ConnectionAirportCode))
+        {
+            route += $"{FormatAirport(itinerary.ConnectionAirportCode)} to ";
+        }
+
+        return route + FormatAirport(itinerary.DestinationAirportCode);
     }
 
     private static string FormatPrice(decimal price) =>

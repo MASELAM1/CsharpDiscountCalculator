@@ -7,7 +7,11 @@ public static class AirportCodeCatalog
     private static readonly IReadOnlyDictionary<string, Airport> Airports = CreateAirports();
 
     public static IReadOnlyCollection<Airport> SupportedAirports =>
-        Airports.Values.OrderBy(airport => airport.Code).ToArray();
+        Airports.Values
+            .OrderBy(airport => airport.CountryCode == "ZA" ? 0 : 1)
+            .ThenBy(airport => airport.CountryName)
+            .ThenBy(airport => airport.Code)
+            .ToArray();
 
     public static Airport GetAirport(string? code)
     {
@@ -23,7 +27,7 @@ public static class AirportCodeCatalog
     private static IReadOnlyDictionary<string, Airport> CreateAirports()
     {
         var airports = new Dictionary<string, Airport>(StringComparer.OrdinalIgnoreCase);
-        Add(airports, "ZA", "South Africa", "JNB:Johannesburg, CPT:Cape Town, DUR:Durban, PLZ:Gqeberha, ELS:East London, BFN:Bloemfontein, HLA:Lanseria, GRJ:George, KIM:Kimberley, MQP:Mbombela, SZK:Skukuza, UTN:Upington, RCB:Richards Bay, PZB:Pietermaritzburg, HDS:Hoedspruit");
+        Add(airports, "ZA", "South Africa", "JNB:Johannesburg, CPT:Cape Town, DUR:Durban, PLZ:Gqeberha, ELS:East London, BFN:Bloemfontein, HLA:Lanseria, GRJ:George, KIM:Kimberley, MQP:Mbombela, SZK:Skukuza, UTN:Upington, RCB:Richards Bay, PZB:Pietermaritzburg, HDS:Hoedspruit, UTT:Mthatha, PTG:Polokwane, MGH:Margate, SIS:Sishen");
         Add(airports, "AO", "Angola", "LAD:Luanda");
         Add(airports, "BW", "Botswana", "GBE:Gaborone, MUB:Maun");
         Add(airports, "KM", "Comoros", "HAH:Moroni");

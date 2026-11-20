@@ -68,7 +68,12 @@ public class TravelQuoteServiceTests
             new Traveler("Thabo", "Dlamini")
         };
 
-        var quote = service.Calculate(new TravelBooking(travelers, [TravelSector.Flight], null, TestItinerary()));
+        var quote = service.Calculate(new TravelBooking(
+            travelers,
+            [TravelSector.Flight],
+            null,
+            TestItinerary(),
+            FlightCompany.SAA));
 
         Assert.Equal(60_000m, quote.Subtotal);
         Assert.Equal(4_700m, quote.DiscountAmount);
@@ -87,7 +92,8 @@ public class TravelQuoteServiceTests
             [traveler],
             [TravelSector.Flight],
             null,
-            TestItinerary()));
+            TestItinerary(),
+            FlightCompany.SAA));
 
         Assert.Equal(1_000m, quote.DiscountAmount);
         Assert.Equal(9_000m, quote.Total);
@@ -109,7 +115,8 @@ public class TravelQuoteServiceTests
             travelers,
             [TravelSector.Flight],
             null,
-            TestItinerary()));
+            TestItinerary(),
+            FlightCompany.SAA));
 
         Assert.Equal(30_000m, quote.Subtotal);
         Assert.Equal(0m, quote.DiscountAmount);
@@ -141,7 +148,8 @@ public class TravelQuoteServiceTests
             [traveler],
             [TravelSector.Flight, TravelSector.Car],
             null,
-            TestItinerary()));
+            TestItinerary(),
+            FlightCompany.SAA));
 
         Assert.Equal(20_000.06m, quote.Subtotal);
         Assert.Equal(2_700.01m, quote.DiscountAmount);
@@ -191,7 +199,8 @@ public class TravelQuoteServiceTests
             [new Traveler("Amina", "")],
             [TravelSector.Flight],
             null,
-            TestItinerary());
+            TestItinerary(),
+            FlightCompany.SAA);
 
         Assert.Throws<ArgumentException>(() => service.Calculate(booking));
     }
@@ -241,6 +250,72 @@ public class TravelQuoteServiceTests
         Assert.Equal(itinerary, quote.Itinerary);
     }
 
+    [Theory]
+    [InlineData("JNB", "CPT", 3_500)]
+    [InlineData("JNB", "WDH", 6_000)]
+    [InlineData("JNB", "LHR", 7_500)]
+    public void Calculate_UsesFlightPriceForRouteClassification(
+        string origin,
+        string destination,
+        decimal expectedFlightPrice)
+    {
+        var quote = new TravelQuoteService().Calculate(
+            CreateBooking(1, [TravelSector.Flight], itinerary: TestItinerary(origin, destination)));
+
+        Assert.Equal(expectedFlightPrice, quote.Lines.Single().UnitPrice);
+    }
+
+    [Theory]
+    [InlineData(FlightCompany.SAA, 8, 3_500)]
+    [InlineData(FlightCompany.SAA, 12, 3_620)]
+    [InlineData(FlightCompany.FlySafair, 8, 4_000)]
+    [InlineData(FlightCompany.FlySafair, 12, 4_120)]
+    [InlineData(FlightCompany.Airlink, 8, 4_790)]
+    [InlineData(FlightCompany.Airlink, 12, 4_910)]
+    public void Calculate_UsesDomesticCompanyAndDepartureTimeForFlightPrice(
+        FlightCompany company,
+        int departureHour,
+        decimal expectedPrice)
+    {
+        var itinerary = TestItinerary() with
+        {
+            DepartureLocalDateTime = new DateTime(2026, 1, 1, departureHour, 0, 0)
+        };
+        var quote = new TravelQuoteService().Calculate(
+            CreateBooking(1, [TravelSector.Flight], itinerary: itinerary, flightCompany: company));
+
+        Assert.Equal(company, quote.FlightCompany);
+        Assert.Equal(expectedPrice, quote.Lines.Single().UnitPrice);
+    }
+
+    [Fact]
+    public void Calculate_RequiresCompanyForDomesticFlight()
+    {
+        var booking = new TravelBooking(
+            [new Traveler("Amina", "Ndlovu")],
+            [TravelSector.Flight],
+            null,
+            TestItinerary());
+
+        Assert.Throws<ArgumentException>(() => new TravelQuoteService().Calculate(booking));
+    }
+
+    [Fact]
+    public void Calculate_UsesCombinedFlightPriceForDomesticAndInternationalItinerary()
+    {
+        var itinerary = new TravelItinerary(
+            "JNB",
+            "LHR",
+            new DateTime(2026, 1, 1, 8, 0, 0),
+            new DateTime(2026, 1, 1, 20, 0, 0),
+            "CPT");
+        var quote = new TravelQuoteService().Calculate(
+            CreateBooking(1, [TravelSector.Flight], itinerary: itinerary));
+
+        Assert.Equal(TravelClassification.DomesticAndInternational, quote.Classification);
+        Assert.Equal(12_000m, quote.Lines.Single().UnitPrice);
+    }
+
     [Fact]
     public void TravelClassificationService_RejectsUnsupportedAirportCode()
     {
@@ -249,20 +324,111 @@ public class TravelQuoteServiceTests
         Assert.Throws<ArgumentException>(() => TravelClassificationService.Classify(itinerary));
     }
 
+    [Theory]
+    [InlineData("JNB", "CPT", "LHR")]
+    [InlineData("CPT", "JNB", "DXB")]
+    public void TravelClassificationService_ClassifiesDomesticThenInternationalLegs(
+        string origin,
+        string connection,
+        string destination)
+    {
+        var itinerary = new TravelItinerary(
+            origin,
+            destination,
+            new DateTime(2026, 1, 1, 8, 0, 0),
+            new DateTime(2026, 1, 1, 20, 0, 0),
+            connection);
+
+        Assert.Equal(
+            TravelClassification.DomesticAndInternational,
+            TravelClassificationService.Classify(itinerary));
+        TravelClassificationService.ValidateSelection(
+            TravelClassification.DomesticAndInternational,
+            itinerary);
+    }
+
+    [Fact]
+    public void TravelClassificationService_RejectsTripTypeThatDoesNotMatchRoute()
+    {
+        var itinerary = TestItinerary("JNB", "WDH");
+
+        Assert.Throws<ArgumentException>(() =>
+            TravelClassificationService.ValidateSelection(TravelClassification.International, itinerary));
+    }
+
+    [Fact]
+    public void TravelClassificationService_RejectsNonDomesticConnectionLeg()
+    {
+        var itinerary = new TravelItinerary(
+            "JNB",
+            "LHR",
+            new DateTime(2026, 1, 1, 8, 0, 0),
+            new DateTime(2026, 1, 1, 20, 0, 0),
+            "WDH");
+
+        Assert.Throws<ArgumentException>(() => TravelClassificationService.Classify(itinerary));
+    }
+
+    [Fact]
+    public void AirportCodeCatalog_ListsSouthAfricanAirportsFirst()
+    {
+        var airports = AirportCodeCatalog.SupportedAirports.ToArray();
+        var firstNonSouthAfricanIndex = Array.FindIndex(airports, airport => airport.CountryCode != "ZA");
+
+        Assert.All(
+            airports.Take(firstNonSouthAfricanIndex),
+            airport => Assert.Equal("South Africa", airport.CountryName));
+        Assert.Equal("ZA", airports[0].CountryCode);
+        Assert.DoesNotContain(
+            airports.Skip(firstNonSouthAfricanIndex),
+            airport => airport.CountryCode == "ZA");
+        Assert.Contains(airports, airport => airport.Code == "UTT" && airport.CountryCode == "ZA");
+        Assert.Contains(airports, airport => airport.Code == "PTG" && airport.CountryCode == "ZA");
+    }
+
+    [Fact]
+    public void DomesticFlightRouteCatalog_ContainsOnlySupportedSouthAfricanAirports()
+    {
+        foreach (var route in DomesticFlightRouteCatalog.SupportedRoutes)
+        {
+            Assert.Equal("ZA", AirportCodeCatalog.GetAirport(route.OriginAirportCode).CountryCode);
+            Assert.Equal("ZA", AirportCodeCatalog.GetAirport(route.DestinationAirportCode).CountryCode);
+        }
+
+        Assert.Contains(
+            DomesticFlightRouteCatalog.SupportedRoutes,
+            route => route.OriginAirportCode == "JNB" && route.DestinationAirportCode == "CPT");
+        Assert.Contains(
+            DomesticFlightRouteCatalog.SupportedRoutes,
+            route => route.OriginAirportCode == "CPT" && route.DestinationAirportCode == "JNB");
+    }
+
     private static TravelBooking CreateBooking(
         int travelerCount,
         IReadOnlyList<TravelSector> sectors,
         string? corporateCode = null,
         string? customerCode = null,
         HotelCategory? hotelCategory = null,
-        TravelItinerary? itinerary = null) =>
-        new(
+        TravelItinerary? itinerary = null,
+        FlightCompany? flightCompany = null)
+    {
+        itinerary ??= TestItinerary();
+        if (flightCompany is null
+            && sectors.Contains(TravelSector.Flight)
+            && TravelClassificationService.Classify(itinerary) == TravelClassification.Domestic)
+        {
+            flightCompany = FlightCompany.SAA;
+        }
+
+        return new(
             Enumerable.Range(1, travelerCount)
                 .Select(index => new Traveler($"Test{index}", $"Traveler{index}", corporateCode, customerCode))
                 .ToArray(),
             sectors,
             hotelCategory,
-            itinerary ?? TestItinerary());
+            itinerary,
+            flightCompany);
+    }
 
     private static TravelItinerary TestItinerary(
         string origin = "JNB",

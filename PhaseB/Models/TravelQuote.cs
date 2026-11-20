@@ -8,4 +8,5 @@ public sealed record TravelQuote(
     decimal Total,
     string DiscountDescription,
     TravelItinerary Itinerary,
-    TravelClassification Classification);
+    TravelClassification Classification,
+    FlightCompany? FlightCompany);

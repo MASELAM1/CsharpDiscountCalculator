@@ -28,11 +28,23 @@ airports; they are retained for the quote and do not affect classification.
 - A route within one country is **Domestic**.
 - A route between two SADC countries is **Regional**.
 - Any other cross-border route is **International**.
+- A route with a domestic first leg and an international second leg is
+  **Domestic + International**.
 
-The browser offers the supported airport codes in its selectors. The terminal
-interface accepts the same codes. Unsupported codes are rejected rather than
-classified by guesswork. The airport-to-country mapping is maintained in
-`Services/AirportCodeCatalog.cs`.
+Choose a trip type in the browser or terminal; the selected type is validated
+against the route, rather than overriding its classification. The browser
+filters airport choices to match the selected type. For **Domestic +
+International**, choose an origin, a domestic connection in the same country,
+and an international destination.
+
+The browser offers South African airports first, followed by the other
+supported airport codes; the terminal interface accepts the same codes.
+Unsupported codes are rejected rather than classified by guesswork. A static
+list of South African domestic airport routes can fill the browser's airport
+selectors. It is not a live schedule or a guarantee of current airline service.
+The airport-to-country mapping is maintained in
+`Services/AirportCodeCatalog.cs`, and domestic route pairs are maintained in
+`Services/DomesticFlightRouteCatalog.cs`.
 
 ## Demo prices
 
@@ -55,8 +67,21 @@ more than the previous one. Other sector prices are:
 | Sector | Price per traveler |
 | --- | ---: |
 | Car | R1,800.00 |
-| Flight | R7,500.00 |
 | Parking | R300.00 |
+
+Flight prices vary by trip type and, for domestic flights, by company:
+
+| Trip type | Price per traveler |
+| --- | ---: |
+| Domestic — SAA | R3,500.00 |
+| Domestic — FlySafair | R4,000.00 |
+| Domestic — Airlink | R4,790.00 |
+| Regional | R6,000.00 |
+| International | R7,500.00 |
+| Domestic + International | R12,000.00 |
+
+Domestic carrier fares are R120.00 higher for departures at or after 12:00
+local time. Choose a carrier when booking a domestic flight.
 
 ## Discount rules
 

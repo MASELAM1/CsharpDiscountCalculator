@@ -91,8 +91,18 @@ public static class ConsoleUI
                     travelers.Add(new Traveler(firstName, lastName, corporateCode, customerCode));
                 }
 
+                Console.WriteLine("Trip type: 1. Domestic  2. Regional  3. International  4. Domestic + International");
+                Console.Write("Trip type: ");
+                var travelClassification = ParseTravelClassification(Console.ReadLine());
                 Console.Write("Origin airport code: ");
                 var originAirportCode = Console.ReadLine() ?? string.Empty;
+                var connectionAirportCode = string.Empty;
+                if (travelClassification == TravelClassification.DomesticAndInternational)
+                {
+                    Console.Write("Domestic connection airport code: ");
+                    connectionAirportCode = Console.ReadLine() ?? string.Empty;
+                }
+
                 Console.Write("Destination airport code: ");
                 var destinationAirportCode = Console.ReadLine() ?? string.Empty;
                 Console.Write("Departure date and local time (yyyy-MM-dd HH:mm): ");
@@ -103,10 +113,21 @@ public static class ConsoleUI
                     originAirportCode,
                     destinationAirportCode,
                     departureDateTime,
-                    arrivalDateTime);
+                    arrivalDateTime,
+                    connectionAirportCode);
+                TravelClassificationService.ValidateSelection(travelClassification, itinerary);
 
                 Console.Write("Sectors (Hotel, Car, Flight, Parking; comma-separated): ");
                 var sectors = ParseSectors(Console.ReadLine());
+                FlightCompany? flightCompany = null;
+                if (sectors.Contains(TravelSector.Flight)
+                    && travelClassification == TravelClassification.Domestic)
+                {
+                    Console.WriteLine("Domestic flight company: 1. SAA  2. FlySafair  3. Airlink");
+                    Console.Write("Flight company: ");
+                    flightCompany = ParseFlightCompany(Console.ReadLine());
+                }
+
                 HotelCategory? hotelCategory = null;
                 if (sectors.Contains(TravelSector.Hotel))
                 {
@@ -115,7 +136,7 @@ public static class ConsoleUI
                 }
 
                 var quote = quoteService.Calculate(
-                    new TravelBooking(travelers, sectors, hotelCategory, itinerary));
+                    new TravelBooking(travelers, sectors, hotelCategory, itinerary, flightCompany));
                 DisplayQuote(quote);
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
@@ -167,6 +188,25 @@ public static class ConsoleUI
             _ => throw new FormatException("Choose BnB or a hotel rating from 1 to 5 stars.")
         };
 
+    private static TravelClassification ParseTravelClassification(string? input) =>
+        input?.Trim() switch
+        {
+            "1" => TravelClassification.Domestic,
+            "2" => TravelClassification.Regional,
+            "3" => TravelClassification.International,
+            "4" => TravelClassification.DomesticAndInternational,
+            _ => throw new FormatException("Choose a trip type from 1 to 4.")
+        };
+
+    private static FlightCompany ParseFlightCompany(string? input) =>
+        input?.Trim() switch
+        {
+            "1" => FlightCompany.SAA,
+            "2" => FlightCompany.FlySafair,
+            "3" => FlightCompany.Airlink,
+            _ => throw new FormatException("Choose a domestic flight company from 1 to 3.")
+        };
+
     private static DateTime ParseDateTime(string? input, string label)
     {
         if (DateTime.TryParseExact(
@@ -189,8 +229,18 @@ public static class ConsoleUI
             traveler => $"{traveler.FirstName} {traveler.LastName}")));
         var origin = AirportCodeCatalog.GetAirport(quote.Itinerary.OriginAirportCode);
         var destination = AirportCodeCatalog.GetAirport(quote.Itinerary.DestinationAirportCode);
-        Console.WriteLine($"Classification: {quote.Classification}");
-        Console.WriteLine($"Route: {origin.Name} ({origin.Code}) to {destination.Name} ({destination.Code})");
+        Console.WriteLine($"Classification: {quote.Classification.ToDisplayName()}");
+        if (quote.FlightCompany is { } flightCompany)
+        {
+            Console.WriteLine($"Flight company: {flightCompany}");
+        }
+
+        var connection = string.IsNullOrWhiteSpace(quote.Itinerary.ConnectionAirportCode)
+            ? null
+            : AirportCodeCatalog.GetAirport(quote.Itinerary.ConnectionAirportCode);
+        Console.WriteLine($"Route: {origin.Name} ({origin.Code})"
+            + (connection is null ? string.Empty : $" to {connection.Name} ({connection.Code})")
+            + $" to {destination.Name} ({destination.Code})");
         Console.WriteLine($"Departure: {FormatDateTime(quote.Itinerary.DepartureLocalDateTime)} (local)");
         Console.WriteLine($"Arrival: {FormatDateTime(quote.Itinerary.ArrivalLocalDateTime)} (local)");
         Console.WriteLine($"{"Traveler",-24}{"Sector",-20}{"Unit price",-14}{"Subtotal",-14}{"Discount",-14}{"Total",-14}");
