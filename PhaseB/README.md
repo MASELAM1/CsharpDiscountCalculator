@@ -19,6 +19,21 @@ dotnet run --project PhaseB/CsharpDiscountCalculator.PhaseB.csproj -- --browser
 dotnet run --project PhaseB/CsharpDiscountCalculator.PhaseB.csproj -- --terminal
 ```
 
+## Itinerary classification
+
+Every booking includes an origin airport, destination airport, and departure
+and arrival date/time. The displayed times are local times at their respective
+airports; they are retained for the quote and do not affect classification.
+
+- A route within one country is **Domestic**.
+- A route between two SADC countries is **Regional**.
+- Any other cross-border route is **International**.
+
+The browser offers the supported airport codes in its selectors. The terminal
+interface accepts the same codes. Unsupported codes are rejected rather than
+classified by guesswork. The airport-to-country mapping is maintained in
+`Services/AirportCodeCatalog.cs`.
+
 ## Demo prices
 
 Prices are demo amounts per traveler and are defined in

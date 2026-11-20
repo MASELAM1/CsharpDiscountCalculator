@@ -68,7 +68,7 @@ public class TravelQuoteServiceTests
             new Traveler("Thabo", "Dlamini")
         };
 
-        var quote = service.Calculate(new TravelBooking(travelers, [TravelSector.Flight], null));
+        var quote = service.Calculate(new TravelBooking(travelers, [TravelSector.Flight], null, TestItinerary()));
 
         Assert.Equal(60_000m, quote.Subtotal);
         Assert.Equal(4_700m, quote.DiscountAmount);
@@ -86,7 +86,8 @@ public class TravelQuoteServiceTests
         var quote = service.Calculate(new TravelBooking(
             [traveler],
             [TravelSector.Flight],
-            null));
+            null,
+            TestItinerary()));
 
         Assert.Equal(1_000m, quote.DiscountAmount);
         Assert.Equal(9_000m, quote.Total);
@@ -107,7 +108,8 @@ public class TravelQuoteServiceTests
         var quote = service.Calculate(new TravelBooking(
             travelers,
             [TravelSector.Flight],
-            null));
+            null,
+            TestItinerary()));
 
         Assert.Equal(30_000m, quote.Subtotal);
         Assert.Equal(0m, quote.DiscountAmount);
@@ -138,7 +140,8 @@ public class TravelQuoteServiceTests
         var quote = service.Calculate(new TravelBooking(
             [traveler],
             [TravelSector.Flight, TravelSector.Car],
-            null));
+            null,
+            TestItinerary()));
 
         Assert.Equal(20_000.06m, quote.Subtotal);
         Assert.Equal(2_700.01m, quote.DiscountAmount);
@@ -172,7 +175,8 @@ public class TravelQuoteServiceTests
         var quote = service.Calculate(new TravelBooking(
             [traveler],
             [TravelSector.Hotel],
-            HotelCategory.FiveStar));
+            HotelCategory.FiveStar,
+            TestItinerary()));
 
         Assert.Equal(9_000m, quote.Lines.Single().UnitPrice);
         Assert.Equal(8_010m, quote.Total);
@@ -186,7 +190,8 @@ public class TravelQuoteServiceTests
         var booking = new TravelBooking(
             [new Traveler("Amina", "")],
             [TravelSector.Flight],
-            null);
+            null,
+            TestItinerary());
 
         Assert.Throws<ArgumentException>(() => service.Calculate(booking));
     }
@@ -219,18 +224,54 @@ public class TravelQuoteServiceTests
             service.Calculate(CreateBooking(1, [TravelSector.Flight], "111XYZ")));
     }
 
+    [Theory]
+    [InlineData("JNB", "CPT", TravelClassification.Domestic)]
+    [InlineData("JNB", "WDH", TravelClassification.Regional)]
+    [InlineData("JNB", "LHR", TravelClassification.International)]
+    public void Calculate_ClassifiesRouteAndReturnsItinerary(
+        string origin,
+        string destination,
+        TravelClassification expectedClassification)
+    {
+        var itinerary = TestItinerary(origin, destination);
+        var quote = CreateService(1_000m).Calculate(
+            CreateBooking(1, [TravelSector.Flight], itinerary: itinerary));
+
+        Assert.Equal(expectedClassification, quote.Classification);
+        Assert.Equal(itinerary, quote.Itinerary);
+    }
+
+    [Fact]
+    public void TravelClassificationService_RejectsUnsupportedAirportCode()
+    {
+        var itinerary = TestItinerary("XXX", "JNB");
+
+        Assert.Throws<ArgumentException>(() => TravelClassificationService.Classify(itinerary));
+    }
+
     private static TravelBooking CreateBooking(
         int travelerCount,
         IReadOnlyList<TravelSector> sectors,
         string? corporateCode = null,
         string? customerCode = null,
-        HotelCategory? hotelCategory = null) =>
+        HotelCategory? hotelCategory = null,
+        TravelItinerary? itinerary = null) =>
         new(
             Enumerable.Range(1, travelerCount)
                 .Select(index => new Traveler($"Test{index}", $"Traveler{index}", corporateCode, customerCode))
                 .ToArray(),
             sectors,
-            hotelCategory);
+            hotelCategory,
+            itinerary ?? TestItinerary());
+
+    private static TravelItinerary TestItinerary(
+        string origin = "JNB",
+        string destination = "CPT") =>
+        new(
+            origin,
+            destination,
+            new DateTime(2026, 1, 1, 8, 0, 0),
+            new DateTime(2026, 1, 1, 10, 0, 0));
 
     private static TravelQuoteService CreateService(decimal price) =>
         new(new TravelPriceCatalog(

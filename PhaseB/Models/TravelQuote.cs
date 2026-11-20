@@ -6,4 +6,6 @@ public sealed record TravelQuote(
     decimal Subtotal,
     decimal DiscountAmount,
     decimal Total,
-    string DiscountDescription);
+    string DiscountDescription,
+    TravelItinerary Itinerary,
+    TravelClassification Classification);

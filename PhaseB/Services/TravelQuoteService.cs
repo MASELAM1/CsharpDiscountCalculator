@@ -16,6 +16,8 @@ public sealed class TravelQuoteService
     public TravelQuote Calculate(TravelBooking booking)
     {
         ArgumentNullException.ThrowIfNull(booking);
+        ArgumentNullException.ThrowIfNull(booking.Itinerary);
+        var classification = TravelClassificationService.Classify(booking.Itinerary);
 
         ArgumentNullException.ThrowIfNull(booking.Travelers);
         if (booking.Travelers.Count == 0)
@@ -145,7 +147,9 @@ public sealed class TravelQuoteService
             subtotalTotal,
             discountTotal,
             total,
-            description);
+            description,
+            booking.Itinerary,
+            classification);
     }
 
     private static IReadOnlyDictionary<TravelSector, decimal> CorporateDiscountRates() =>

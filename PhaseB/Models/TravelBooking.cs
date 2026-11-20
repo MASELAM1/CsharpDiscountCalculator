@@ -3,4 +3,5 @@ namespace CsharpDiscountCalculator.PhaseB.Models;
 public sealed record TravelBooking(
     IReadOnlyList<Traveler> Travelers,
     IReadOnlyList<TravelSector> SelectedSectors,
-    HotelCategory? HotelCategory);
+    HotelCategory? HotelCategory,
+    TravelItinerary Itinerary);

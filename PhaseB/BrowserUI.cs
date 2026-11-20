@@ -37,8 +37,13 @@ public static class BrowserUI
             var customerCodes = form["customerCodes"].ToArray();
             var travelers = new List<Traveler>();
             var hotelCategoryInput = form["hotelCategory"].ToString();
+            var originAirportCodeInput = form["originAirportCode"].ToString();
+            var destinationAirportCodeInput = form["destinationAirportCode"].ToString();
+            var departureDateTimeInput = form["departureDateTime"].ToString();
+            var arrivalDateTimeInput = form["arrivalDateTime"].ToString();
             var selectedSectors = new List<TravelSector>();
             HotelCategory? hotelCategory = null;
+            TravelItinerary? itinerary = null;
             TravelQuote? quote = null;
             string? error = null;
 
@@ -65,6 +70,32 @@ public static class BrowserUI
                     throw new ArgumentException("Enter a first and last name for every traveler.");
                 }
 
+                if (!DateTime.TryParseExact(
+                    departureDateTimeInput,
+                    "yyyy-MM-dd'T'HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var departureDateTime))
+                {
+                    throw new FormatException("Enter a valid departure date and time.");
+                }
+
+                if (!DateTime.TryParseExact(
+                    arrivalDateTimeInput,
+                    "yyyy-MM-dd'T'HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var arrivalDateTime))
+                {
+                    throw new FormatException("Enter a valid arrival date and time.");
+                }
+
+                itinerary = new TravelItinerary(
+                    originAirportCodeInput,
+                    destinationAirportCodeInput,
+                    departureDateTime,
+                    arrivalDateTime);
+
                 foreach (var sectorValue in form["sectors"])
                 {
                     if (!Enum.TryParse<TravelSector>(sectorValue, true, out var sector) || !Enum.IsDefined(sector))
@@ -87,7 +118,7 @@ public static class BrowserUI
                 }
 
                 quote = new TravelQuoteService().Calculate(
-                    new TravelBooking(travelers, selectedSectors, hotelCategory));
+                    new TravelBooking(travelers, selectedSectors, hotelCategory, itinerary));
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
             {
@@ -100,7 +131,11 @@ public static class BrowserUI
                 selectedSectors,
                 hotelCategoryInput,
                 quote,
-                error));
+                error,
+                originAirportCodeInput,
+                destinationAirportCodeInput,
+                departureDateTimeInput,
+                arrivalDateTimeInput));
         });
 
         await app.StartAsync();
@@ -130,7 +165,11 @@ public static class BrowserUI
         IReadOnlyCollection<TravelSector>? selectedSectors = null,
         string hotelCategoryInput = "",
         TravelQuote? quote = null,
-        string? error = null)
+        string? error = null,
+        string originAirportCodeInput = "",
+        string destinationAirportCodeInput = "",
+        string departureDateTimeInput = "",
+        string arrivalDateTimeInput = "")
     {
         var catalog = new TravelPriceCatalog();
         var formTravelers = travelers ?? [new Traveler(string.Empty, string.Empty)];
@@ -204,6 +243,15 @@ public static class BrowserUI
                 .Append("\" placeholder=\"ABC333\"><button type=\"button\" class=\"remove-traveler\">Remove traveler</button></fieldset>");
         }
 
+        html.Append("<fieldset><legend>Flight itinerary</legend><p class=\"hint\">Classification uses the countries of the selected airports. Enter local date and time for each airport.</p>");
+        AppendAirportSelect(html, "originAirportCode", "Origin airport", originAirportCodeInput);
+        AppendAirportSelect(html, "destinationAirportCode", "Destination airport", destinationAirportCodeInput);
+        html.Append("<label for=\"departure-date-time\">Departure date and local time</label><input id=\"departure-date-time\" name=\"departureDateTime\" type=\"datetime-local\" required value=\"")
+            .Append(HtmlEncoder.Default.Encode(departureDateTimeInput))
+            .Append("\"><label for=\"arrival-date-time\">Arrival date and local time</label><input id=\"arrival-date-time\" name=\"arrivalDateTime\" type=\"datetime-local\" required value=\"")
+            .Append(HtmlEncoder.Default.Encode(arrivalDateTimeInput))
+            .Append("\"></fieldset>");
+
         html.Append("""
                   </div>
                   <button type="button" id="add-traveler">Add traveler</button>
@@ -270,6 +318,15 @@ public static class BrowserUI
             html.Append("<section class=\"quote\" aria-labelledby=\"quote-title\"><h2 id=\"quote-title\">Booking quote</h2><p>Travelers: ")
                 .Append(HtmlEncoder.Default.Encode(string.Join(", ", quote.Travelers.Select(
                     traveler => $"{traveler.FirstName} {traveler.LastName}"))))
+                .Append("</p><p>Classification: ")
+                .Append(HtmlEncoder.Default.Encode(quote.Classification.ToString()))
+                .Append("</p><p>Route: ")
+                .Append(HtmlEncoder.Default.Encode(
+                    $"{AirportCodeCatalog.GetAirport(quote.Itinerary.OriginAirportCode).Name} ({quote.Itinerary.OriginAirportCode}) to {AirportCodeCatalog.GetAirport(quote.Itinerary.DestinationAirportCode).Name} ({quote.Itinerary.DestinationAirportCode})"))
+                .Append("</p><p>Departure: ")
+                .Append(FormatDateTime(quote.Itinerary.DepartureLocalDateTime))
+                .Append(" (local)</p><p>Arrival: ")
+                .Append(FormatDateTime(quote.Itinerary.ArrivalLocalDateTime))
                 .Append("""
                 </p>
                 <table>
@@ -352,6 +409,39 @@ public static class BrowserUI
         return html.ToString();
     }
 
+    private static void AppendAirportSelect(
+        StringBuilder html,
+        string fieldName,
+        string label,
+        string selectedCode)
+    {
+        html.Append("<label for=\"")
+            .Append(fieldName)
+            .Append("\">")
+            .Append(label)
+            .Append("</label><select id=\"")
+            .Append(fieldName)
+            .Append("\" name=\"")
+            .Append(fieldName)
+            .Append("\" required><option value=\"\">Choose an airport</option>");
+
+        foreach (var airport in AirportCodeCatalog.SupportedAirports)
+        {
+            html.Append("<option value=\"")
+                .Append(airport.Code)
+                .Append('"')
+                .Append(string.Equals(airport.Code, selectedCode, StringComparison.OrdinalIgnoreCase) ? " selected" : string.Empty)
+                .Append('>')
+                .Append(HtmlEncoder.Default.Encode($"{airport.Code} — {airport.Name}, {airport.CountryName}"))
+                .Append("</option>");
+        }
+
+        html.Append("</select>");
+    }
+
     private static string FormatPrice(decimal price) =>
         price.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string FormatDateTime(DateTime dateTime) =>
+        dateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 }
