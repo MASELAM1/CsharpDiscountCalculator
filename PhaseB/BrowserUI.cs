@@ -43,6 +43,9 @@ public static class BrowserUI
             var destinationAirportCodeInput = form["destinationAirportCode"].ToString();
             var departureDateTimeInput = form["departureDateTime"].ToString();
             var arrivalDateTimeInput = form["arrivalDateTime"].ToString();
+            var returnFlightInput = string.Equals(form["returnFlight"], "true", StringComparison.OrdinalIgnoreCase);
+            var returnDepartureDateTimeInput = form["returnDepartureDateTime"].ToString();
+            var returnArrivalDateTimeInput = form["returnArrivalDateTime"].ToString();
             var flightCompanyInput = form["flightCompany"].ToString();
             var selectedSectors = new List<TravelSector>();
             HotelCategory? hotelCategory = null;
@@ -94,6 +97,34 @@ public static class BrowserUI
                     throw new FormatException("Enter a valid arrival date and time.");
                 }
 
+                DateTime? returnDepartureDateTime = null;
+                DateTime? returnArrivalDateTime = null;
+                if (returnFlightInput)
+                {
+                    if (!DateTime.TryParseExact(
+                        returnDepartureDateTimeInput,
+                        "yyyy-MM-dd'T'HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var parsedReturnDepartureDateTime))
+                    {
+                        throw new FormatException("Enter a valid return departure date and time.");
+                    }
+
+                    if (!DateTime.TryParseExact(
+                        returnArrivalDateTimeInput,
+                        "yyyy-MM-dd'T'HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var parsedReturnArrivalDateTime))
+                    {
+                        throw new FormatException("Enter a valid return arrival date and time.");
+                    }
+
+                    returnDepartureDateTime = parsedReturnDepartureDateTime;
+                    returnArrivalDateTime = parsedReturnArrivalDateTime;
+                }
+
                 if (!Enum.TryParse<TravelClassification>(
                     travelClassificationInput,
                     true,
@@ -108,7 +139,9 @@ public static class BrowserUI
                     destinationAirportCodeInput,
                     departureDateTime,
                     arrivalDateTime,
-                    connectionAirportCodeInput);
+                    connectionAirportCodeInput,
+                    returnDepartureDateTime,
+                    returnArrivalDateTime);
                 TravelClassificationService.ValidateSelection(selectedClassification, itinerary);
 
                 foreach (var sectorValue in form["sectors"])
@@ -164,7 +197,10 @@ public static class BrowserUI
                 destinationAirportCodeInput,
                 departureDateTimeInput,
                 arrivalDateTimeInput,
-                flightCompanyInput));
+                flightCompanyInput,
+                returnFlightInput,
+                returnDepartureDateTimeInput,
+                returnArrivalDateTimeInput));
         });
 
         await app.StartAsync();
@@ -201,7 +237,10 @@ public static class BrowserUI
         string destinationAirportCodeInput = "",
         string departureDateTimeInput = "",
         string arrivalDateTimeInput = "",
-        string flightCompanyInput = "")
+        string flightCompanyInput = "",
+        bool returnFlightInput = false,
+        string returnDepartureDateTimeInput = "",
+        string returnArrivalDateTimeInput = "")
     {
         var catalog = new TravelPriceCatalog();
         var formTravelers = travelers ?? [new Traveler(string.Empty, string.Empty)];
@@ -222,6 +261,9 @@ public static class BrowserUI
                 .classification-label label { margin: 0; }
                 .classification-flags { align-items: center; display: inline-flex; gap: .35rem; }
                 .country-flag { border: 1px solid #d5d9df; border-radius: 2px; height: 20px; object-fit: cover; width: 30px; }
+                .sector .return-flight-option { align-items: center; display: flex; gap: .5rem; }
+                .sector .return-flight-option input { width: auto; }
+                .sector .return-flight-times label { display: block; }
                 form, .quote { background: #f7f8fa; border: 1px solid #d5d9df; border-radius: 8px; padding: 1.2rem; }
                 label { display: block; font-weight: 600; margin: 1rem 0 .4rem; }
                 input, select, button { font: inherit; padding: .6rem; }
@@ -234,6 +276,8 @@ public static class BrowserUI
                 table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
                 th, td { border-bottom: 1px solid #ccc; padding: .65rem; text-align: right; }
                 th:first-child, td:first-child { text-align: left; }
+                .sector-quote { margin-top: 1.25rem; }
+                .sector-quote h3 { font-size: 1.05rem; margin: .5rem 0 0; }
                 .totals { margin-top: 1rem; text-align: right; }
                 .grand-total { font-size: 1.3rem; font-weight: 700; }
                 @media (max-width: 640px) { table { font-size: .85rem; } th, td { padding: .4rem .2rem; } }
@@ -342,7 +386,18 @@ public static class BrowserUI
                 .Append("\">")
                 .Append(sector == TravelSector.Hotel ? "Hotel" : sector.ToString())
                 .Append(priceDescription)
-                .Append("</label></div>");
+                .Append("</label>");
+            if (sector == TravelSector.Flight)
+            {
+                AppendReturnFlightControls(
+                    html,
+                    flightSelected,
+                    returnFlightInput,
+                    returnDepartureDateTimeInput,
+                    returnArrivalDateTimeInput);
+            }
+
+            html.Append("</div>");
         }
 
         html.Append("</fieldset><label for=\"hotel-category\">Hotel category</label>")
@@ -402,36 +457,59 @@ public static class BrowserUI
                 .Append(FormatDateTime(quote.Itinerary.DepartureLocalDateTime))
                 .Append(" (local)</p><p>Arrival: ")
                 .Append(FormatDateTime(quote.Itinerary.ArrivalLocalDateTime))
-                .Append("""
-                </p>
-                <table>
-                  <thead><tr><th>Traveler</th><th>Sector</th><th>Unit price</th><th>Subtotal</th><th>Discount</th><th>Total</th></tr></thead>
-                  <tbody>
-            """);
+                .Append(" (local)</p>");
 
-            foreach (var line in quote.Lines)
+            if (quote.Itinerary.ReturnDepartureLocalDateTime is { } returnDeparture
+                && quote.Itinerary.ReturnArrivalLocalDateTime is { } returnArrival)
             {
-                var sectorName = line.Sector == TravelSector.Hotel
-                    ? $"Hotel ({line.HotelCategory!.Value.ToDisplayName()})"
-                    : line.Sector.ToString();
-                html.Append("<tr><td>")
-                    .Append(HtmlEncoder.Default.Encode($"{line.Traveler.FirstName} {line.Traveler.LastName}"))
-                    .Append("</td><td>").Append(HtmlEncoder.Default.Encode(sectorName))
-                    .Append("</td><td>R").Append(FormatPrice(line.UnitPrice))
-                    .Append("</td><td>R").Append(FormatPrice(line.Subtotal))
-                    .Append("</td><td>R").Append(FormatPrice(line.DiscountAmount))
-                    .Append("</td><td>R").Append(FormatPrice(line.Total))
-                    .Append("</td></tr>");
+                html.Append("<p>Return route: ")
+                    .Append(HtmlEncoder.Default.Encode(FormatReturnRoute(quote.Itinerary)))
+                    .Append("</p><p>Return departure: ")
+                    .Append(FormatDateTime(returnDeparture))
+                    .Append(" (local)</p><p>Return arrival: ")
+                    .Append(FormatDateTime(returnArrival))
+                    .Append(" (local)</p>");
             }
 
-            html.Append("</tbody></table><div class=\"totals\"><p>Subtotal: R")
+            foreach (var sectorLines in quote.Lines.GroupBy(line => line.Sector))
+            {
+                var firstLine = sectorLines.First();
+                var sectorName = firstLine.Sector == TravelSector.Hotel
+                    ? $"Hotel ({firstLine.HotelCategory!.Value.ToDisplayName()})"
+                    : firstLine.Sector == TravelSector.Flight
+                        && quote.Itinerary.ReturnDepartureLocalDateTime is not null
+                            ? "Flight (round trip)"
+                            : firstLine.Sector.ToString();
+                html.Append("<section class=\"sector-quote\"><h3>")
+                    .Append(HtmlEncoder.Default.Encode(sectorName))
+                    .Append("""
+                    </h3><table>
+                      <thead><tr><th>Traveler</th><th>Unit price</th><th>Subtotal</th><th>Discount</th><th>Total</th></tr></thead>
+                      <tbody>
+                    """);
+
+                foreach (var line in sectorLines)
+                {
+                    html.Append("<tr><td>")
+                        .Append(HtmlEncoder.Default.Encode($"{line.Traveler.FirstName} {line.Traveler.LastName}"))
+                        .Append("</td><td>R").Append(FormatPrice(line.UnitPrice))
+                        .Append("</td><td>R").Append(FormatPrice(line.Subtotal))
+                        .Append("</td><td>R").Append(FormatPrice(line.DiscountAmount))
+                        .Append("</td><td>R").Append(FormatPrice(line.Total))
+                        .Append("</td></tr>");
+                }
+
+                html.Append("</tbody></table></section>");
+            }
+
+            html.Append("<div class=\"totals\"><p>Subtotal: R")
                 .Append(FormatPrice(quote.Subtotal))
                 .Append("</p><p>Discount: R")
                 .Append(FormatPrice(quote.DiscountAmount))
-                .Append("</p><p class=\"grand-total\">Total: R")
-                .Append(FormatPrice(quote.Total))
                 .Append("</p><p>")
                 .Append(HtmlEncoder.Default.Encode(quote.DiscountDescription))
+                .Append("</p><p class=\"grand-total\">Booking total: R")
+                .Append(FormatPrice(quote.Total))
                 .Append("</p></div></section>");
         }
 
@@ -454,6 +532,11 @@ public static class BrowserUI
                   const connectionAirport = document.getElementById('connectionAirportCode');
                   const destinationAirport = document.getElementById('destinationAirportCode');
                   const classificationFlags = document.getElementById('classification-flags');
+                  const returnFlightField = document.getElementById('return-flight-field');
+                  const returnFlight = document.getElementById('returnFlight');
+                  const returnFlightTimes = document.getElementById('return-flight-times');
+                  const returnDeparture = document.getElementById('return-departure-date-time');
+                  const returnArrival = document.getElementById('return-arrival-date-time');
 
                   function updateClassificationFlags() {
                     classificationFlags.replaceChildren();
@@ -527,12 +610,26 @@ public static class BrowserUI
                     flightCompany.required = needed;
                   }
 
+                  function updateReturnFlight() {
+                    const flightSelected = flightCheckbox.checked;
+                    const returnSelected = flightSelected && returnFlight.checked;
+                    returnFlightField.hidden = !flightSelected;
+                    returnFlight.disabled = !flightSelected;
+                    returnFlightTimes.hidden = !returnSelected;
+                    returnDeparture.disabled = !returnSelected;
+                    returnDeparture.required = returnSelected;
+                    returnArrival.disabled = !returnSelected;
+                    returnArrival.required = returnSelected;
+                  }
+
                   travelClassification.addEventListener('change', updateAirportOptions);
                   originAirport.addEventListener('change', updateAirportOptions);
                   connectionAirport.addEventListener('change', updateAirportOptions);
                   destinationAirport.addEventListener('change', updateAirportOptions);
                   travelClassification.addEventListener('change', updateFlightCompany);
                   flightCheckbox.addEventListener('change', updateFlightCompany);
+                  flightCheckbox.addEventListener('change', updateReturnFlight);
+                  returnFlight.addEventListener('change', updateReturnFlight);
 
                   domesticRoute.addEventListener('change', () => {
                     if (!domesticRoute.value) return;
@@ -543,6 +640,7 @@ public static class BrowserUI
                     updateFlightCompany();
                   });
                   updateAirportOptions();
+                  updateReturnFlight();
 
                   addButton.addEventListener('click', () => {
                     const index = nextIndex++;
@@ -696,6 +794,31 @@ public static class BrowserUI
         html.Append("</select></div>");
     }
 
+    private static void AppendReturnFlightControls(
+        StringBuilder html,
+        bool flightSelected,
+        bool returnFlightSelected,
+        string returnDepartureDateTime,
+        string returnArrivalDateTime)
+    {
+        html.Append("<div id=\"return-flight-field\"")
+            .Append(flightSelected ? string.Empty : " hidden")
+            .Append("><label class=\"return-flight-option\"><input id=\"returnFlight\" name=\"returnFlight\" type=\"checkbox\" value=\"true\"")
+            .Append(returnFlightSelected ? " checked" : string.Empty)
+            .Append(flightSelected ? string.Empty : " disabled")
+            .Append(">Include return flight</label><div id=\"return-flight-times\"")
+            .Append(flightSelected && returnFlightSelected ? string.Empty : " hidden")
+            .Append("><label for=\"return-departure-date-time\">Return departure date and local time</label><input id=\"return-departure-date-time\" name=\"returnDepartureDateTime\" type=\"datetime-local\"")
+            .Append(flightSelected && returnFlightSelected ? " required" : " disabled")
+            .Append(" value=\"")
+            .Append(HtmlEncoder.Default.Encode(returnDepartureDateTime))
+            .Append("\"><label for=\"return-arrival-date-time\">Return arrival date and local time</label><input id=\"return-arrival-date-time\" name=\"returnArrivalDateTime\" type=\"datetime-local\"")
+            .Append(flightSelected && returnFlightSelected ? " required" : " disabled")
+            .Append(" value=\"")
+            .Append(HtmlEncoder.Default.Encode(returnArrivalDateTime))
+            .Append("\"></div></div>");
+    }
+
     private static void AppendDomesticRouteSelect(
         StringBuilder html,
         string originAirportCode,
@@ -746,6 +869,23 @@ public static class BrowserUI
         }
 
         return route + FormatAirport(itinerary.DestinationAirportCode);
+    }
+
+    private static string FormatReturnRoute(TravelItinerary itinerary)
+    {
+        static string FormatAirport(string code)
+        {
+            var airport = AirportCodeCatalog.GetAirport(code);
+            return $"{airport.Name} ({airport.Code})";
+        }
+
+        var route = $"{FormatAirport(itinerary.DestinationAirportCode)} to ";
+        if (!string.IsNullOrWhiteSpace(itinerary.ConnectionAirportCode))
+        {
+            route += $"{FormatAirport(itinerary.ConnectionAirportCode)} to ";
+        }
+
+        return route + FormatAirport(itinerary.OriginAirportCode);
     }
 
     private static string FormatPrice(decimal price) =>

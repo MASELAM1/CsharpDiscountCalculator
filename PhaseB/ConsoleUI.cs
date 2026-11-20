@@ -119,6 +119,29 @@ public static class ConsoleUI
 
                 Console.Write("Sectors (Hotel, Car, Flight, Parking; comma-separated): ");
                 var sectors = ParseSectors(Console.ReadLine());
+                if (sectors.Contains(TravelSector.Flight))
+                {
+                    Console.Write("Include return flight? (y/n): ");
+                    switch (Console.ReadLine()?.Trim().ToLowerInvariant())
+                    {
+                        case "y":
+                            Console.Write("Return departure date and local time (yyyy-MM-dd HH:mm): ");
+                            var returnDeparture = ParseDateTime(Console.ReadLine(), "return departure");
+                            Console.Write("Return arrival date and local time (yyyy-MM-dd HH:mm): ");
+                            var returnArrival = ParseDateTime(Console.ReadLine(), "return arrival");
+                            itinerary = itinerary with
+                            {
+                                ReturnDepartureLocalDateTime = returnDeparture,
+                                ReturnArrivalLocalDateTime = returnArrival
+                            };
+                            break;
+                        case "n":
+                            break;
+                        default:
+                            throw new FormatException("Choose y or n for a return flight.");
+                    }
+                }
+
                 FlightCompany? flightCompany = null;
                 if (sectors.Contains(TravelSector.Flight)
                     && travelClassification == TravelClassification.Domestic)
@@ -243,6 +266,16 @@ public static class ConsoleUI
             + $" to {destination.Name} ({destination.Code})");
         Console.WriteLine($"Departure: {FormatDateTime(quote.Itinerary.DepartureLocalDateTime)} (local)");
         Console.WriteLine($"Arrival: {FormatDateTime(quote.Itinerary.ArrivalLocalDateTime)} (local)");
+        if (quote.Itinerary.ReturnDepartureLocalDateTime is { } returnDeparture
+            && quote.Itinerary.ReturnArrivalLocalDateTime is { } returnArrival)
+        {
+            Console.WriteLine($"Return route: {destination.Name} ({destination.Code})"
+                + (connection is null ? string.Empty : $" to {connection.Name} ({connection.Code})")
+                + $" to {origin.Name} ({origin.Code})");
+            Console.WriteLine($"Return departure: {FormatDateTime(returnDeparture)} (local)");
+            Console.WriteLine($"Return arrival: {FormatDateTime(returnArrival)} (local)");
+        }
+
         Console.WriteLine($"{"Traveler",-24}{"Sector",-20}{"Unit price",-14}{"Subtotal",-14}{"Discount",-14}{"Total",-14}");
         Console.WriteLine(new string('-', 100));
 
@@ -250,7 +283,10 @@ public static class ConsoleUI
         {
             var sectorName = line.Sector == TravelSector.Hotel
                 ? $"Hotel ({line.HotelCategory!.Value.ToDisplayName()})"
-                : line.Sector.ToString();
+                : line.Sector == TravelSector.Flight
+                    && quote.Itinerary.ReturnDepartureLocalDateTime is not null
+                        ? "Flight (round trip)"
+                        : line.Sector.ToString();
             var travelerName = $"{line.Traveler.FirstName} {line.Traveler.LastName}";
             Console.WriteLine(
                 $"{travelerName,-24}{sectorName,-20}" +

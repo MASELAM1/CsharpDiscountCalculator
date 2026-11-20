@@ -26,7 +26,9 @@ public sealed class TravelQuoteService
                 "Unknown flight company.");
         }
 
-        var includesFlight = booking.SelectedSectors?.Contains(TravelSector.Flight) == true;
+        ArgumentNullException.ThrowIfNull(booking.SelectedSectors);
+        var includesFlight = booking.SelectedSectors.Contains(TravelSector.Flight);
+        ValidateReturnFlight(booking.Itinerary, includesFlight);
         if (includesFlight && classification == TravelClassification.Domestic && booking.FlightCompany is null)
         {
             throw new ArgumentException("Choose a flight company for a domestic flight.");
@@ -52,7 +54,6 @@ public sealed class TravelQuoteService
             throw new ArgumentException("Enter a first and last name for every traveler.");
         }
 
-        ArgumentNullException.ThrowIfNull(booking.SelectedSectors);
         if (booking.SelectedSectors.Count == 0)
         {
             throw new ArgumentException("Select at least one travel sector.");
@@ -109,6 +110,16 @@ public sealed class TravelQuoteService
                         sector == TravelSector.Flight ? classification : null,
                         sector == TravelSector.Flight ? booking.FlightCompany : null,
                         sector == TravelSector.Flight ? booking.Itinerary.DepartureLocalDateTime : null);
+                    if (sector == TravelSector.Flight
+                        && booking.Itinerary.ReturnDepartureLocalDateTime is { } returnDeparture)
+                    {
+                        unitPrice += _priceCatalog.GetPricePerTraveler(
+                            sector,
+                            travelClassification: classification,
+                            flightCompany: booking.FlightCompany,
+                            departureLocalDateTime: returnDeparture);
+                    }
+
                     return (Sector: sector, HotelCategory: hotelCategory, UnitPrice: unitPrice, Subtotal: Round(unitPrice));
                 })
                 .ToArray();
@@ -185,6 +196,38 @@ public sealed class TravelQuoteService
             [TravelSector.Car] = 0.08m,
             [TravelSector.Parking] = 0.067m
         };
+
+    private static void ValidateReturnFlight(TravelItinerary itinerary, bool includesFlight)
+    {
+        var hasReturnDeparture = itinerary.ReturnDepartureLocalDateTime is not null;
+        var hasReturnArrival = itinerary.ReturnArrivalLocalDateTime is not null;
+        if (hasReturnDeparture != hasReturnArrival)
+        {
+            throw new ArgumentException("Enter both return departure and arrival date and times.");
+        }
+
+        if (!hasReturnDeparture)
+        {
+            return;
+        }
+
+        if (!includesFlight)
+        {
+            throw new ArgumentException("A return flight can only be selected when the Flight sector is selected.");
+        }
+
+        if (itinerary.ReturnDepartureLocalDateTime is { } returnDeparture
+            && returnDeparture <= itinerary.ArrivalLocalDateTime)
+        {
+            throw new ArgumentException("Return departure must be after the outbound arrival.");
+        }
+
+        if (itinerary.ReturnArrivalLocalDateTime is { } returnArrival
+            && returnArrival <= itinerary.DepartureLocalDateTime)
+        {
+            throw new ArgumentException("Return arrival must be after the outbound departure.");
+        }
+    }
 
     private static decimal Round(decimal amount) =>
         decimal.Round(amount, 2, MidpointRounding.AwayFromZero);

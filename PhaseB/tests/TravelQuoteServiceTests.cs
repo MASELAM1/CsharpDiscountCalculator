@@ -289,6 +289,60 @@ public class TravelQuoteServiceTests
     }
 
     [Fact]
+    public void Calculate_ChargesAnotherDomesticFareForReturnFlight()
+    {
+        var itinerary = TestItinerary() with
+        {
+            ReturnDepartureLocalDateTime = new DateTime(2026, 1, 2, 12, 0, 0),
+            ReturnArrivalLocalDateTime = new DateTime(2026, 1, 2, 14, 0, 0)
+        };
+
+        var quote = new TravelQuoteService().Calculate(
+            CreateBooking(1, [TravelSector.Flight], itinerary: itinerary, flightCompany: FlightCompany.SAA));
+
+        Assert.Equal(7_120m, quote.Lines.Single().UnitPrice);
+        Assert.Equal(itinerary, quote.Itinerary);
+    }
+
+    [Fact]
+    public void Calculate_RequiresBothReturnFlightTimes()
+    {
+        var itinerary = TestItinerary() with
+        {
+            ReturnDepartureLocalDateTime = new DateTime(2026, 1, 2, 12, 0, 0)
+        };
+
+        Assert.Throws<ArgumentException>(() => new TravelQuoteService().Calculate(
+            CreateBooking(1, [TravelSector.Flight], itinerary: itinerary, flightCompany: FlightCompany.SAA)));
+    }
+
+    [Fact]
+    public void Calculate_RequiresFlightSectorForReturnFlight()
+    {
+        var itinerary = TestItinerary() with
+        {
+            ReturnDepartureLocalDateTime = new DateTime(2026, 1, 2, 12, 0, 0),
+            ReturnArrivalLocalDateTime = new DateTime(2026, 1, 2, 14, 0, 0)
+        };
+
+        Assert.Throws<ArgumentException>(() => new TravelQuoteService().Calculate(
+            CreateBooking(1, [TravelSector.Car], itinerary: itinerary)));
+    }
+
+    [Fact]
+    public void Calculate_RequiresReturnDepartureAfterOutboundArrival()
+    {
+        var itinerary = TestItinerary() with
+        {
+            ReturnDepartureLocalDateTime = new DateTime(2026, 1, 1, 9, 0, 0),
+            ReturnArrivalLocalDateTime = new DateTime(2026, 1, 2, 14, 0, 0)
+        };
+
+        Assert.Throws<ArgumentException>(() => new TravelQuoteService().Calculate(
+            CreateBooking(1, [TravelSector.Flight], itinerary: itinerary, flightCompany: FlightCompany.SAA)));
+    }
+
+    [Fact]
     public void Calculate_RequiresCompanyForDomesticFlight()
     {
         var booking = new TravelBooking(

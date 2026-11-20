@@ -47,6 +47,10 @@ The airport-to-country mapping is maintained in
 `Services/DomesticFlightRouteCatalog.cs`.
 The browser displays route-country flags beside the trip type and quote
 classification. Flag images load from FlagCDN and require an internet connection.
+When Flight is selected, either interface can include a return flight on the
+reverse route. Enter its departure and arrival local times; the return leg is
+priced as another one-way fare, with the domestic departure-time surcharge
+applied independently to each leg.
 
 ## Demo prices
 
@@ -83,7 +87,8 @@ Flight prices vary by trip type and, for domestic flights, by company:
 | Domestic + International | R12,000.00 |
 
 Domestic carrier fares are R120.00 higher for departures at or after 12:00
-local time. Choose a carrier when booking a domestic flight.
+local time. Choose a carrier when booking a domestic flight. A return flight
+is priced as an additional one-way fare.
 
 ## Discount rules
 
