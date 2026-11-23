@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 
 namespace CsharpDiscountCalculator.PhaseB;
@@ -22,6 +23,10 @@ public static class BrowserUI
         builder.WebHost.UseUrls("http://127.0.0.1:0");
 
         await using var app = builder.Build();
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(Path.Combine(AppContext.BaseDirectory, "wwwroot"))
+        });
         app.MapGet("/", async (HttpResponse response) =>
         {
             response.ContentType = "text/html; charset=utf-8";
@@ -301,6 +306,10 @@ public static class BrowserUI
                 .sector .return-flight-option { align-items: center; display: flex; gap: .5rem; }
                 .sector .return-flight-option input { width: auto; }
                 .sector .return-flight-times label { display: block; }
+                .meal-samples { display: flex; gap: .75rem; margin-top: .75rem; }
+                .meal-samples figure { margin: 0; text-align: center; }
+                .meal-samples img { background: #f7f8fa; border: 1px solid #d5d9df; border-radius: 6px; height: 56px; object-fit: contain; padding: 4px; width: 72px; }
+                .meal-samples figcaption { color: #555; font-size: .8rem; }
                 form, .quote { background: #f7f8fa; border: 1px solid #d5d9df; border-radius: 8px; padding: 1.2rem; }
                 label { display: block; font-weight: 600; margin: 1rem 0 .4rem; }
                 input, select, button { font: inherit; padding: .6rem; }
@@ -514,6 +523,10 @@ public static class BrowserUI
 
         html.Append("""
                 </select>
+                <div class="meal-samples" aria-label="Meal examples">
+                  <figure><img src="/images/breakfast.svg" alt="Sample breakfast with toast, egg, and fruit"><figcaption>Breakfast</figcaption></figure>
+                  <figure><img src="/images/dinner.svg" alt="Sample dinner with vegetables and a main dish"><figcaption>Dinner</figcaption></figure>
+                </div>
                 <p class="hint">The selected meal price is added to the hotel category price.</p>
                 <p class="hint">Hotel prices are demo prices per traveler and differ by category. Enter a corporate code, a customer code, or neither for each traveler. Customer discounts require that traveler’s subtotal to be above R15,000; corporate discounts take precedence and do not stack.</p>
                 <button type="submit">Calculate quote</button>
