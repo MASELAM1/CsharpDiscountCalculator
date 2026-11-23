@@ -10,13 +10,12 @@ sectors, hotel categories, demo prices, and corporate/customer discount codes.
 dotnet run --project PhaseB/CsharpDiscountCalculator.PhaseB.csproj
 ```
 
-Choose the terminal or browser interface. The browser server listens on
-`127.0.0.1` using an available port and prints its URL if it cannot open a
-browser automatically. You can also launch an interface directly:
+PhaseB runs in the browser. The browser server listens on `127.0.0.1` using an
+available port and prints its URL if it cannot open a browser automatically.
+You can optionally pass `--browser` explicitly:
 
 ```bash
 dotnet run --project PhaseB/CsharpDiscountCalculator.PhaseB.csproj -- --browser
-dotnet run --project PhaseB/CsharpDiscountCalculator.PhaseB.csproj -- --terminal
 ```
 
 ## Itinerary classification
@@ -31,23 +30,23 @@ airports; they are retained for the quote and do not affect classification.
 - A route with a domestic first leg and an international second leg is
   **Domestic + International**.
 
-Choose a trip type in the browser or terminal; the selected type is validated
-against the route, rather than overriding its classification. The browser
-filters airport choices to match the selected type. For **Domestic +
+Choose a trip type in the browser; the selected type is validated against the
+route, rather than overriding its classification. The browser filters airport
+choices to match the selected type. For **Domestic +
 International**, choose an origin, a domestic connection in the same country,
 and an international destination.
 
 The browser offers South African airports first, followed by the other
-supported airport codes; the terminal interface accepts the same codes.
-Unsupported codes are rejected rather than classified by guesswork. A static
-list of South African domestic airport routes can fill the browser's airport
-selectors. It is not a live schedule or a guarantee of current airline service.
+supported airport codes. Unsupported codes are rejected rather than classified
+by guesswork. A static list of South African domestic airport routes can fill
+the browser's airport selectors. It is not a live schedule or a guarantee of
+current airline service.
 The airport-to-country mapping is maintained in
 `Services/AirportCodeCatalog.cs`, and domestic route pairs are maintained in
 `Services/DomesticFlightRouteCatalog.cs`.
 The browser displays route-country flags beside the trip type and quote
 classification. Flag images load from FlagCDN and require an internet connection.
-When Flight is selected, either interface can include a return flight on the
+When Flight is selected, the browser can include a return flight on the
 reverse route. Enter its departure and arrival local times; the return leg is
 priced as another one-way fare, with the domestic departure-time surcharge
 applied independently to each leg. For domestic round trips, choose the

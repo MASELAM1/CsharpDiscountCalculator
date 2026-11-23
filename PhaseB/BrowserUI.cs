@@ -297,11 +297,34 @@ public static class BrowserUI
                 table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
                 th, td { border-bottom: 1px solid #ccc; padding: .65rem; text-align: right; }
                 th:first-child, td:first-child { text-align: left; }
-                .sector-quote { margin-top: 1.25rem; }
-                .sector-quote h3 { font-size: 1.05rem; margin: .5rem 0 0; }
-                .totals { margin-top: 1rem; text-align: right; }
-                .grand-total { font-size: 1.3rem; font-weight: 700; }
-                @media (max-width: 640px) { table { font-size: .85rem; } th, td { padding: .4rem .2rem; } }
+                .quote { background: #fff; border-color: #cbd5e1; border-radius: 14px; box-shadow: 0 10px 28px rgba(15, 23, 42, .08); margin: 2rem 0; padding: clamp(1rem, 4vw, 2rem); }
+                .quote-header { align-items: flex-start; border-bottom: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; padding-bottom: 1.25rem; }
+                .quote-header h2 { margin: .15rem 0; }
+                .quote-kicker { color: #475569; font-size: .75rem; font-weight: 700; letter-spacing: .12em; margin: 0; }
+                .quote-context { color: #64748b; margin: .35rem 0 0; }
+                .quote-classification { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; min-width: 10rem; padding: .7rem .9rem; }
+                .quote-classification span { color: #475569; display: block; font-size: .8rem; }
+                .quote-classification strong { color: #1e3a8a; display: block; margin: .2rem 0 .45rem; }
+                .itinerary-summary { background: #f8fafc; border-radius: 10px; margin-top: 1.25rem; padding: 1rem; }
+                .itinerary-summary h3, .sector-quote h3 { font-size: 1rem; margin: 0 0 .75rem; }
+                .itinerary-grid { display: grid; gap: .85rem 1.25rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); margin: 0; }
+                .itinerary-grid dt { color: #64748b; font-size: .8rem; }
+                .itinerary-grid dd { font-weight: 600; margin: .2rem 0 0; }
+                .sector-quote { margin-top: 1.5rem; }
+                .quote-table-wrap { overflow-x: auto; }
+                .quote table { border: 1px solid #e2e8f0; border-radius: 8px; border-spacing: 0; font-size: .92rem; margin: 0; min-width: 620px; overflow: hidden; }
+                .quote th { background: #f1f5f9; color: #334155; font-size: .8rem; }
+                .quote th, .quote td { border-bottom: 1px solid #e2e8f0; padding: .7rem .75rem; }
+                .quote tbody tr:last-child td { border-bottom: 0; }
+                .discount-rate { color: #64748b; display: block; font-size: .78rem; }
+                .quote-totals { background: #f8fafc; border-radius: 10px; margin: 1.5rem 0 0 auto; max-width: 25rem; padding: 1rem 1.25rem; }
+                .total-row { align-items: baseline; display: flex; justify-content: space-between; gap: 1rem; padding: .35rem 0; }
+                .total-row.savings { color: #166534; }
+                .discount-description { color: #64748b; font-size: .85rem; margin: .45rem 0 1rem; }
+                .final-total { align-items: baseline; border-top: 1px solid #cbd5e1; color: #0f172a; display: flex; font-size: 1.1rem; font-weight: 700; justify-content: space-between; gap: 1rem; padding-top: .8rem; }
+                .final-total strong { color: #1d4ed8; font-size: 1.5rem; }
+                .total-note { color: #64748b; font-size: .78rem; margin: .5rem 0 0; text-align: right; }
+                @media (max-width: 640px) { .quote-classification { min-width: 0; } .quote table { font-size: .85rem; } .quote th, .quote td { padding: .55rem; } }
               </style>
             </head>
             <body>
@@ -462,47 +485,66 @@ public static class BrowserUI
 
         if (quote is not null)
         {
-            html.Append("<section class=\"quote\" aria-labelledby=\"quote-title\"><h2 id=\"quote-title\">Booking quote</h2><p>Travelers: ")
-                .Append(HtmlEncoder.Default.Encode(string.Join(", ", quote.Travelers.Select(
-                    traveler => $"{traveler.FirstName} {traveler.LastName}"))))
-                .Append("</p><p>Classification: ")
+            html.Append("""
+                <section class="quote" aria-labelledby="quote-title">
+                  <header class="quote-header">
+                    <div>
+                      <p class="quote-kicker">BOOKING SUMMARY</p>
+                      <h2 id="quote-title">Your travel quote</h2>
+                      <p class="quote-context">Prepared for
+                """)
+                .Append(quote.Travelers.Count)
+                .Append(quote.Travelers.Count == 1 ? " traveler" : " travelers")
+                .Append("""
+                      </p>
+                    </div>
+                    <div class="quote-classification">
+                      <span>Trip type</span><strong>
+                """)
                 .Append(HtmlEncoder.Default.Encode(quote.Classification.ToDisplayName()));
+            html.Append("</strong>");
             AppendCountryFlags(html, quote.Itinerary);
-            html.Append("</p>");
+            html.Append("""
+                    </div>
+                  </header>
+                  <section class="itinerary-summary" aria-labelledby="itinerary-title">
+                    <h3 id="itinerary-title">Trip details</h3>
+                    <dl class="itinerary-grid">
+                      <div><dt>Outbound route</dt><dd>
+                """)
+                .Append(HtmlEncoder.Default.Encode(FormatRoute(quote.Itinerary)))
+                .Append("</dd></div><div><dt>Departure (local)</dt><dd>")
+                .Append(FormatDateTime(quote.Itinerary.DepartureLocalDateTime))
+                .Append("</dd></div><div><dt>Arrival (local)</dt><dd>")
+                .Append(FormatDateTime(quote.Itinerary.ArrivalLocalDateTime))
+                .Append("</dd></div>");
             if (quote.FlightCompany is { } quoteFlightCompany)
             {
-                html.Append("<p>Outbound flight company: ")
+                html.Append("<div><dt>Outbound airline</dt><dd>")
                     .Append(HtmlEncoder.Default.Encode(quoteFlightCompany.ToString()))
-                    .Append("</p>");
+                    .Append("</dd></div>");
             }
 
             if (quote.ReturnFlightCompany is { } quoteReturnFlightCompany)
             {
-                html.Append("<p>Return flight company: ")
+                html.Append("<div><dt>Return airline</dt><dd>")
                     .Append(HtmlEncoder.Default.Encode(quoteReturnFlightCompany.ToString()))
-                    .Append("</p>");
+                    .Append("</dd></div>");
             }
-
-            html.Append("<p>Route: ")
-                .Append(HtmlEncoder.Default.Encode(FormatRoute(quote.Itinerary)))
-                .Append("</p><p>Departure: ")
-                .Append(FormatDateTime(quote.Itinerary.DepartureLocalDateTime))
-                .Append(" (local)</p><p>Arrival: ")
-                .Append(FormatDateTime(quote.Itinerary.ArrivalLocalDateTime))
-                .Append(" (local)</p>");
 
             if (quote.Itinerary.ReturnDepartureLocalDateTime is { } returnDeparture
                 && quote.Itinerary.ReturnArrivalLocalDateTime is { } returnArrival)
             {
-                html.Append("<p>Return route: ")
+                html.Append("<div><dt>Return route</dt><dd>")
                     .Append(HtmlEncoder.Default.Encode(FormatReturnRoute(quote.Itinerary)))
-                    .Append("</p><p>Return departure: ")
+                    .Append("</dd></div><div><dt>Return departure (local)</dt><dd>")
                     .Append(FormatDateTime(returnDeparture))
-                    .Append(" (local)</p><p>Return arrival: ")
+                    .Append("</dd></div><div><dt>Return arrival (local)</dt><dd>")
                     .Append(FormatDateTime(returnArrival))
-                    .Append(" (local)</p>");
+                    .Append("</dd></div>");
             }
 
+            html.Append("</dl></section>");
             foreach (var sectorLines in quote.Lines.GroupBy(line => line.Sector))
             {
                 var firstLine = sectorLines.First();
@@ -515,8 +557,8 @@ public static class BrowserUI
                 html.Append("<section class=\"sector-quote\"><h3>")
                     .Append(HtmlEncoder.Default.Encode(sectorName))
                     .Append("""
-                    </h3><table>
-                      <thead><tr><th>Traveler</th><th>Unit price</th><th>Subtotal</th><th>Discount</th><th>Total</th></tr></thead>
+                    </h3><div class="quote-table-wrap"><table>
+                      <thead><tr><th scope="col">Traveler</th><th scope="col">Price per traveler</th><th scope="col">Before discount</th><th scope="col">Savings</th><th scope="col">Amount due</th></tr></thead>
                       <tbody>
                     """);
 
@@ -526,23 +568,31 @@ public static class BrowserUI
                         .Append(HtmlEncoder.Default.Encode($"{line.Traveler.FirstName} {line.Traveler.LastName}"))
                         .Append("</td><td>R").Append(FormatPrice(line.UnitPrice))
                         .Append("</td><td>R").Append(FormatPrice(line.Subtotal))
-                        .Append("</td><td>R").Append(FormatPrice(line.DiscountAmount))
-                        .Append("</td><td>R").Append(FormatPrice(line.Total))
+                        .Append("</td><td>R").Append(FormatPrice(line.DiscountAmount));
+                    if (line.DiscountRate > 0)
+                    {
+                        html.Append("<span class=\"discount-rate\">")
+                            .Append(line.DiscountRate.ToString("0.#%", CultureInfo.InvariantCulture))
+                            .Append("</span>");
+                    }
+
+                    html.Append("</td><td>R")
+                        .Append(FormatPrice(line.Total))
                         .Append("</td></tr>");
                 }
 
-                html.Append("</tbody></table></section>");
+                html.Append("</tbody></table></div></section>");
             }
 
-            html.Append("<div class=\"totals\"><p>Subtotal: R")
+            html.Append("<div class=\"quote-totals\" aria-label=\"Booking cost summary\"><div class=\"total-row\"><span>Subtotal</span><strong>R")
                 .Append(FormatPrice(quote.Subtotal))
-                .Append("</p><p>Discount: R")
+                .Append("</strong></div><div class=\"total-row savings\"><span>Total savings</span><strong>-R")
                 .Append(FormatPrice(quote.DiscountAmount))
-                .Append("</p><p>")
+                .Append("</strong></div><p class=\"discount-description\">")
                 .Append(HtmlEncoder.Default.Encode(quote.DiscountDescription))
-                .Append("</p><p class=\"grand-total\">Booking total: R")
+                .Append("</p><div class=\"final-total\"><span>Total due</span><strong>R")
                 .Append(FormatPrice(quote.Total))
-                .Append("</p></div></section>");
+                .Append("</strong></div><p class=\"total-note\">All amounts in South African rand (ZAR).</p></div></section>");
         }
 
         html.Append("""
