@@ -6,4 +6,5 @@ public sealed record TravelBooking(
     HotelCategory? HotelCategory,
     TravelItinerary Itinerary,
     FlightCompany? FlightCompany = null,
-    FlightCompany? ReturnFlightCompany = null);
+    FlightCompany? ReturnFlightCompany = null,
+    HotelMealOption? HotelMealOption = null);

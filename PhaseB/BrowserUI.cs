@@ -37,6 +37,7 @@ public static class BrowserUI
             var customerCodes = form["customerCodes"].ToArray();
             var travelers = new List<Traveler>();
             var hotelCategoryInput = form["hotelCategory"].ToString();
+            var hotelMealOptionInput = form["hotelMealOption"].ToString();
             var travelClassificationInput = form["travelClassification"].ToString();
             var originAirportCodeInput = form["originAirportCode"].ToString();
             var connectionAirportCodeInput = form["connectionAirportCode"].ToString();
@@ -50,6 +51,7 @@ public static class BrowserUI
             var returnFlightCompanyInput = form["returnFlightCompany"].ToString();
             var selectedSectors = new List<TravelSector>();
             HotelCategory? hotelCategory = null;
+            HotelMealOption? hotelMealOption = null;
             FlightCompany? flightCompany = null;
             FlightCompany? returnFlightCompany = null;
             TravelItinerary? itinerary = null;
@@ -189,6 +191,17 @@ public static class BrowserUI
                     hotelCategory = parsedCategory;
                 }
 
+                if (!string.IsNullOrWhiteSpace(hotelMealOptionInput))
+                {
+                    if (!Enum.TryParse<HotelMealOption>(hotelMealOptionInput, true, out var parsedMealOption)
+                        || !Enum.IsDefined(parsedMealOption))
+                    {
+                        throw new FormatException("Choose Breakfast + Dinner, Breakfast only, or Dinner only.");
+                    }
+
+                    hotelMealOption = parsedMealOption;
+                }
+
                 quote = new TravelQuoteService().Calculate(
                     new TravelBooking(
                         travelers,
@@ -196,7 +209,8 @@ public static class BrowserUI
                         hotelCategory,
                         itinerary,
                         flightCompany,
-                        returnFlightCompany));
+                        returnFlightCompany,
+                        hotelMealOption));
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException)
             {
@@ -208,6 +222,7 @@ public static class BrowserUI
                 travelers,
                 selectedSectors,
                 hotelCategoryInput,
+                hotelMealOptionInput,
                 quote,
                 error,
                 travelClassificationInput,
@@ -249,6 +264,7 @@ public static class BrowserUI
         IReadOnlyList<Traveler>? travelers = null,
         IReadOnlyCollection<TravelSector>? selectedSectors = null,
         string hotelCategoryInput = "",
+        string hotelMealOptionInput = "",
         TravelQuote? quote = null,
         string? error = null,
         string travelClassificationInput = nameof(TravelClassification.Domestic),
@@ -471,6 +487,34 @@ public static class BrowserUI
 
         html.Append("""
                 </select>
+                <label for="hotel-meal-option">Hotel meal option</label>
+                <select id="hotel-meal-option" name="hotelMealOption"
+            """)
+            .Append(hotelSelected ? " required" : " disabled")
+            .Append("><option value=\"\">Choose a meal option</option>");
+        foreach (var mealOption in Enum.GetValues<HotelMealOption>())
+        {
+            var selectedAttribute = string.Equals(
+                mealOption.ToString(),
+                hotelMealOptionInput,
+                StringComparison.OrdinalIgnoreCase)
+                ? " selected"
+                : string.Empty;
+            html.Append("<option value=\"")
+                .Append(mealOption)
+                .Append('"')
+                .Append(selectedAttribute)
+                .Append('>')
+                .Append(HtmlEncoder.Default.Encode(mealOption.ToDisplayName()))
+                .Append(" — +R")
+                .Append(FormatPrice(catalog.GetHotelMealPricePerTraveler(mealOption)))
+                .Append(" per traveler")
+                .Append("</option>");
+        }
+
+        html.Append("""
+                </select>
+                <p class="hint">The selected meal price is added to the hotel category price.</p>
                 <p class="hint">Hotel prices are demo prices per traveler and differ by category. Enter a corporate code, a customer code, or neither for each traveler. Customer discounts require that traveler’s subtotal to be above R15,000; corporate discounts take precedence and do not stack.</p>
                 <button type="submit">Calculate quote</button>
               </form>
@@ -549,7 +593,7 @@ public static class BrowserUI
             {
                 var firstLine = sectorLines.First();
                 var sectorName = firstLine.Sector == TravelSector.Hotel
-                    ? $"Hotel ({firstLine.HotelCategory!.Value.ToDisplayName()})"
+                    ? $"Hotel ({firstLine.HotelCategory!.Value.ToDisplayName()}, {firstLine.HotelMealOption!.Value.ToDisplayName()})"
                     : firstLine.Sector == TravelSector.Flight
                         && quote.Itinerary.ReturnDepartureLocalDateTime is not null
                             ? "Flight (round trip)"
@@ -557,7 +601,38 @@ public static class BrowserUI
                 html.Append("<section class=\"sector-quote\"><h3>")
                     .Append(HtmlEncoder.Default.Encode(sectorName))
                     .Append("""
-                    </h3><div class="quote-table-wrap"><table>
+                    </h3>
+                    """);
+
+                if (firstLine.Sector == TravelSector.Hotel)
+                {
+                    var travelerCount = sectorLines.Count();
+                    var hotelPrice = catalog.GetHotelPricePerTraveler(firstLine.HotelCategory!.Value);
+                    var mealPrice = catalog.GetHotelMealPricePerTraveler(firstLine.HotelMealOption!.Value);
+                    var mealName = HtmlEncoder.Default.Encode(firstLine.HotelMealOption.Value.ToDisplayName());
+                    var hotelSubtotal = sectorLines.Sum(line => line.Subtotal);
+
+                    html.Append("<p class=\"quote-breakdown\">Hotel: R")
+                        .Append(FormatPrice(hotelPrice))
+                        .Append(" × ")
+                        .Append(travelerCount)
+                        .Append(travelerCount == 1 ? " traveler = R" : " travelers = R")
+                        .Append(FormatPrice(hotelPrice * travelerCount))
+                        .Append("; Meals (")
+                        .Append(mealName)
+                        .Append("): R")
+                        .Append(FormatPrice(mealPrice))
+                        .Append(" × ")
+                        .Append(travelerCount)
+                        .Append(travelerCount == 1 ? " traveler = R" : " travelers = R")
+                        .Append(FormatPrice(mealPrice * travelerCount))
+                        .Append("; Hotel and meals before discount: R")
+                        .Append(FormatPrice(hotelSubtotal))
+                        .Append(".</p>");
+                }
+
+                html.Append("""
+                    <div class="quote-table-wrap"><table>
                       <thead><tr><th scope="col">Traveler</th><th scope="col">Price per traveler</th><th scope="col">Before discount</th><th scope="col">Savings</th><th scope="col">Amount due</th></tr></thead>
                       <tbody>
                     """);
@@ -604,6 +679,7 @@ public static class BrowserUI
                   const hotelCheckbox = document.getElementById('sector-Hotel');
                   const flightCheckbox = document.getElementById('sector-Flight');
                   const hotelCategory = document.getElementById('hotel-category');
+                  const hotelMealOption = document.getElementById('hotel-meal-option');
                   const flightCompanyField = document.getElementById('flight-company-field');
                   const flightCompany = document.getElementById('flightCompany');
                   const travelClassification = document.getElementById('travelClassification');
@@ -758,6 +834,8 @@ public static class BrowserUI
                   function updateHotelCategory() {
                     hotelCategory.disabled = !hotelCheckbox.checked;
                     hotelCategory.required = hotelCheckbox.checked;
+                    hotelMealOption.disabled = !hotelCheckbox.checked;
+                    hotelMealOption.required = hotelCheckbox.checked;
                   }
 
                   hotelCheckbox.addEventListener('change', updateHotelCategory);

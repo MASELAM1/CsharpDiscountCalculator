@@ -6,6 +6,7 @@ public sealed class TravelPriceCatalog
 {
     private readonly IReadOnlyDictionary<TravelSector, decimal> _pricesPerTraveler;
     private readonly IReadOnlyDictionary<HotelCategory, decimal> _hotelPricesPerTraveler;
+    private readonly IReadOnlyDictionary<HotelMealOption, decimal> _hotelMealPricesPerTraveler;
     private readonly IReadOnlyDictionary<TravelClassification, decimal> _flightPricesPerTraveler;
     private readonly IReadOnlyDictionary<FlightCompany, decimal> _domesticFlightPricesPerTraveler;
 
@@ -42,10 +43,17 @@ public sealed class TravelPriceCatalog
         IReadOnlyDictionary<TravelSector, decimal> pricesPerTraveler,
         IReadOnlyDictionary<HotelCategory, decimal> hotelPricesPerTraveler,
         IReadOnlyDictionary<TravelClassification, decimal>? flightPricesPerTraveler = null,
-        IReadOnlyDictionary<FlightCompany, decimal>? domesticFlightPricesPerTraveler = null)
+        IReadOnlyDictionary<FlightCompany, decimal>? domesticFlightPricesPerTraveler = null,
+        IReadOnlyDictionary<HotelMealOption, decimal>? hotelMealPricesPerTraveler = null)
     {
         ArgumentNullException.ThrowIfNull(pricesPerTraveler);
         ArgumentNullException.ThrowIfNull(hotelPricesPerTraveler);
+        hotelMealPricesPerTraveler ??= new Dictionary<HotelMealOption, decimal>
+        {
+            [HotelMealOption.BreakfastAndDinner] = 210m,
+            [HotelMealOption.BreakfastOnly] = 110m,
+            [HotelMealOption.DinnerOnly] = 155m
+        };
 
         foreach (var sector in Enum.GetValues<TravelSector>().Where(sector => sector != TravelSector.Hotel))
         {
@@ -60,6 +68,16 @@ public sealed class TravelPriceCatalog
             if (!hotelPricesPerTraveler.TryGetValue(category, out var price) || price < 0)
             {
                 throw new ArgumentException($"A non-negative price is required for {category}.", nameof(hotelPricesPerTraveler));
+            }
+        }
+
+        foreach (var mealOption in Enum.GetValues<HotelMealOption>())
+        {
+            if (!hotelMealPricesPerTraveler.TryGetValue(mealOption, out var price) || price < 0)
+            {
+                throw new ArgumentException(
+                    $"A non-negative price is required for {mealOption}.",
+                    nameof(hotelMealPricesPerTraveler));
             }
         }
 
@@ -100,6 +118,7 @@ public sealed class TravelPriceCatalog
 
         _pricesPerTraveler = pricesPerTraveler.ToDictionary(pair => pair.Key, pair => pair.Value);
         _hotelPricesPerTraveler = hotelPricesPerTraveler.ToDictionary(pair => pair.Key, pair => pair.Value);
+        _hotelMealPricesPerTraveler = hotelMealPricesPerTraveler.ToDictionary(pair => pair.Key, pair => pair.Value);
         _flightPricesPerTraveler = flightPricesPerTraveler.ToDictionary(pair => pair.Key, pair => pair.Value);
         _domesticFlightPricesPerTraveler = domesticFlightPricesPerTraveler.ToDictionary(pair => pair.Key, pair => pair.Value);
     }
@@ -109,7 +128,8 @@ public sealed class TravelPriceCatalog
         HotelCategory? hotelCategory = null,
         TravelClassification? travelClassification = null,
         FlightCompany? flightCompany = null,
-        DateTime? departureLocalDateTime = null)
+        DateTime? departureLocalDateTime = null,
+        HotelMealOption? hotelMealOption = null)
     {
         if (flightCompany is not null
             && (sector != TravelSector.Flight || travelClassification != TravelClassification.Domestic))
@@ -124,14 +144,23 @@ public sealed class TravelPriceCatalog
 
         if (sector == TravelSector.Hotel)
         {
-            return hotelCategory is { } category && _hotelPricesPerTraveler.TryGetValue(category, out var hotelPrice)
-                ? hotelPrice
-                : throw new ArgumentException("Select a hotel category.");
+            if (hotelCategory is not { } category || !_hotelPricesPerTraveler.TryGetValue(category, out var hotelPrice))
+            {
+                throw new ArgumentException("Select a hotel category.");
+            }
+
+            if (hotelMealOption is not { } selectedMealOption
+                || !_hotelMealPricesPerTraveler.TryGetValue(selectedMealOption, out var mealPrice))
+            {
+                throw new ArgumentException("Select a hotel meal option.");
+            }
+
+            return hotelPrice + mealPrice;
         }
 
-        if (hotelCategory is not null)
+        if (hotelCategory is not null || hotelMealOption is not null)
         {
-            throw new ArgumentException("A hotel category can only be used with the Hotel sector.");
+            throw new ArgumentException("Hotel category and meal options can only be used with the Hotel sector.");
         }
 
         if (sector == TravelSector.Flight && travelClassification is { } classification)
@@ -170,4 +199,9 @@ public sealed class TravelPriceCatalog
         _hotelPricesPerTraveler.TryGetValue(category, out var price)
             ? price
             : throw new ArgumentOutOfRangeException(nameof(category), category, "Unknown hotel category.");
+
+    public decimal GetHotelMealPricePerTraveler(HotelMealOption mealOption) =>
+        _hotelMealPricesPerTraveler.TryGetValue(mealOption, out var price)
+            ? price
+            : throw new ArgumentOutOfRangeException(nameof(mealOption), mealOption, "Unknown hotel meal option.");
 }

@@ -69,7 +69,17 @@ name. If Hotel is selected, choose one hotel category:
 | 5-star hotel | R9,000.00 |
 
 BnB is priced the same as a 2-star hotel, and each higher star level costs
-more than the previous one. Other sector prices are:
+more than the previous one. Choose a meal option for the hotel: Breakfast +
+Dinner, Breakfast only, or Dinner only. The selected meal price is added to the
+hotel category price:
+
+| Meal option | Additional price per traveler |
+| --- | ---: |
+| Breakfast + Dinner | R210.00 |
+| Breakfast only | R110.00 |
+| Dinner only | R155.00 |
+
+Other sector prices are:
 
 | Sector | Price per traveler |
 | --- | ---: |

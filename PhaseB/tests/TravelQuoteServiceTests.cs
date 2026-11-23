@@ -7,7 +7,7 @@ public class TravelQuoteServiceTests
 {
     [Theory]
     [InlineData(TravelSector.Flight, 0.10, 900)]
-    [InlineData(TravelSector.Hotel, 0.11, 890)]
+    [InlineData(TravelSector.Hotel, 0.11, 1_076.90)]
     [InlineData(TravelSector.Car, 0.08, 920)]
     [InlineData(TravelSector.Parking, 0.067, 933)]
     public void Calculate_AppliesCorporateDiscountBySector(
@@ -21,7 +21,8 @@ public class TravelQuoteServiceTests
             1,
             [sector],
             "111ZAA",
-            hotelCategory: sector == TravelSector.Hotel ? HotelCategory.TwoStar : null));
+            hotelCategory: sector == TravelSector.Hotel ? HotelCategory.TwoStar : null,
+            hotelMealOption: sector == TravelSector.Hotel ? HotelMealOption.BreakfastAndDinner : null));
 
         Assert.Equal(expectedRate, quote.Lines.Single().DiscountRate);
         Assert.Equal(expectedTotal, quote.Total);
@@ -184,11 +185,32 @@ public class TravelQuoteServiceTests
             [traveler],
             [TravelSector.Hotel],
             HotelCategory.FiveStar,
-            TestItinerary()));
+            TestItinerary(),
+            HotelMealOption: HotelMealOption.DinnerOnly));
 
-        Assert.Equal(9_000m, quote.Lines.Single().UnitPrice);
-        Assert.Equal(8_010m, quote.Total);
+        Assert.Equal(9_155m, quote.Lines.Single().UnitPrice);
+        Assert.Equal(HotelMealOption.DinnerOnly, quote.Lines.Single().HotelMealOption);
+        Assert.Equal(8_147.95m, quote.Total);
         Assert.Equal([traveler], quote.Travelers);
+    }
+
+    [Theory]
+    [InlineData(HotelMealOption.BreakfastAndDinner, 4_410)]
+    [InlineData(HotelMealOption.BreakfastOnly, 4_310)]
+    [InlineData(HotelMealOption.DinnerOnly, 4_355)]
+    public void Calculate_RecordsSelectedHotelMealOptionAndAddsItsPrice(
+        HotelMealOption mealOption,
+        decimal expectedPrice)
+    {
+        var quote = new TravelQuoteService().Calculate(new TravelBooking(
+            [new Traveler("Amina", "Ndlovu")],
+            [TravelSector.Hotel],
+            HotelCategory.TwoStar,
+            TestItinerary(),
+            HotelMealOption: mealOption));
+
+        Assert.Equal(expectedPrice, quote.Lines.Single().UnitPrice);
+        Assert.Equal(mealOption, quote.Lines.Single().HotelMealOption);
     }
 
     [Fact]
@@ -212,6 +234,18 @@ public class TravelQuoteServiceTests
         var booking = CreateBooking(1, [TravelSector.Hotel]);
 
         Assert.Throws<ArgumentException>(() => service.Calculate(booking));
+    }
+
+    [Fact]
+    public void Calculate_RequiresHotelMealOptionWhenHotelIsSelected()
+    {
+        var booking = new TravelBooking(
+            [new Traveler("Amina", "Ndlovu")],
+            [TravelSector.Hotel],
+            HotelCategory.TwoStar,
+            TestItinerary());
+
+        Assert.Throws<ArgumentException>(() => new TravelQuoteService().Calculate(booking));
     }
 
     [Theory]
@@ -499,6 +533,7 @@ public class TravelQuoteServiceTests
         string? corporateCode = null,
         string? customerCode = null,
         HotelCategory? hotelCategory = null,
+        HotelMealOption? hotelMealOption = null,
         TravelItinerary? itinerary = null,
         FlightCompany? flightCompany = null,
         FlightCompany? returnFlightCompany = null)
@@ -519,7 +554,8 @@ public class TravelQuoteServiceTests
             hotelCategory,
             itinerary,
             flightCompany,
-            returnFlightCompany);
+            returnFlightCompany,
+            hotelMealOption);
     }
 
     private static TravelItinerary TestItinerary(

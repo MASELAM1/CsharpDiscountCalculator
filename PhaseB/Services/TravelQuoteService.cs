@@ -94,6 +94,24 @@ public sealed class TravelQuoteService
             throw new ArgumentException("Choose a hotel category only when the Hotel sector is selected.");
         }
 
+        if (includesHotel && booking.HotelMealOption is null)
+        {
+            throw new ArgumentException("Choose a hotel meal option.");
+        }
+
+        if (!includesHotel && booking.HotelMealOption is not null)
+        {
+            throw new ArgumentException("Choose a hotel meal option only when the Hotel sector is selected.");
+        }
+
+        if (booking.HotelMealOption is { } mealOption && !Enum.IsDefined(mealOption))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(booking.HotelMealOption),
+                mealOption,
+                "Unknown hotel meal option.");
+        }
+
         var rates = CorporateDiscountRates();
         var lines = new List<TravelQuoteLine>();
         var customerCodeCount = 0;
@@ -123,12 +141,14 @@ public sealed class TravelQuoteService
                 .Select(sector =>
                 {
                     var hotelCategory = sector == TravelSector.Hotel ? booking.HotelCategory : null;
+                    var hotelMealOption = sector == TravelSector.Hotel ? booking.HotelMealOption : null;
                     var unitPrice = _priceCatalog.GetPricePerTraveler(
                         sector,
                         hotelCategory,
                         sector == TravelSector.Flight ? classification : null,
                         sector == TravelSector.Flight ? booking.FlightCompany : null,
-                        sector == TravelSector.Flight ? booking.Itinerary.DepartureLocalDateTime : null);
+                        sector == TravelSector.Flight ? booking.Itinerary.DepartureLocalDateTime : null,
+                        hotelMealOption);
                     if (sector == TravelSector.Flight
                         && booking.Itinerary.ReturnDepartureLocalDateTime is { } returnDeparture)
                     {
@@ -139,7 +159,12 @@ public sealed class TravelQuoteService
                             departureLocalDateTime: returnDeparture);
                     }
 
-                    return (Sector: sector, HotelCategory: hotelCategory, UnitPrice: unitPrice, Subtotal: Round(unitPrice));
+                    return (
+                        Sector: sector,
+                        HotelCategory: hotelCategory,
+                        HotelMealOption: hotelMealOption,
+                        UnitPrice: unitPrice,
+                        Subtotal: Round(unitPrice));
                 })
                 .ToArray();
             var travelerSubtotal = Round(travelerLines.Sum(line => line.Subtotal));
@@ -174,6 +199,7 @@ public sealed class TravelQuoteService
                     traveler,
                     line.Sector,
                     line.HotelCategory,
+                    line.HotelMealOption,
                     line.UnitPrice,
                     line.Subtotal,
                     rate,
