@@ -595,14 +595,24 @@ internal static class TravelerBookingFormPage
                     .Append(FormatPrice(line.Total)).Append("</td></tr>");
             }
 
-            html.Append("</tbody></table></div></section>");
+            var travelerSubtotal = lines.Sum(line => line.Subtotal);
+            var travelerDiscount = lines.Sum(line => line.DiscountAmount);
+            var travelerTotal = lines.Sum(line => line.Total);
+            html.Append("</tbody></table></div><div class=\"totals traveler-totals\"><div class=\"total\"><span>Subtotal</span><strong>R")
+                .Append(FormatPrice(travelerSubtotal)).Append("</strong></div><div class=\"total\"><span>Savings</span><strong>R")
+                .Append(FormatPrice(travelerDiscount)).Append("</strong></div><div class=\"total\"><span>Percentage saved/lost</span><strong>")
+                .Append(FormatSavingsPercentage(travelerSubtotal, travelerDiscount))
+                .Append("</strong></div><div class=\"total\"><strong>Traveler total</strong><strong>R")
+                .Append(FormatPrice(travelerTotal)).Append("</strong></div></div></section>");
         }
 
         html.Append("<div class=\"totals\"><div class=\"total\"><span>Subtotal</span><strong>R")
             .Append(FormatPrice(quote.Subtotal)).Append("</strong></div><div class=\"total\"><span>Savings</span><strong>R")
-            .Append(FormatPrice(quote.DiscountAmount)).Append("</strong></div><p>")
+            .Append(FormatPrice(quote.DiscountAmount)).Append("</strong></div><div class=\"total\"><span>Percentage saved/lost</span><strong>")
+            .Append(FormatSavingsPercentage(quote.Subtotal, quote.DiscountAmount))
+            .Append("</strong></div><p>")
             .Append(Encode(quote.DiscountDescription))
-            .Append("</p><div class=\"total\"><strong>Total due</strong><strong>R")
+            .Append("</p><div class=\"total\"><strong>Total due for all travelers</strong><strong>R")
             .Append(FormatPrice(quote.Total)).Append("</strong></div></div></section>");
     }
 
@@ -815,6 +825,13 @@ internal static class TravelerBookingFormPage
 
     private static string FormatPrice(decimal price) =>
         price.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string FormatSavingsPercentage(decimal subtotal, decimal discount)
+    {
+        var percentage = subtotal == 0m ? 0m : Math.Abs(discount) / subtotal * 100m;
+        var result = discount < 0m ? "lost" : "saved";
+        return $"{percentage.ToString("0.00", CultureInfo.InvariantCulture)}% {result}";
+    }
 
     private static string FormatDateTime(DateTime dateTime) =>
         dateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
