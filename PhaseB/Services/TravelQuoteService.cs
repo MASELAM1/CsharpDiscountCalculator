@@ -16,62 +16,6 @@ public sealed class TravelQuoteService
     public TravelQuote Calculate(TravelBooking booking)
     {
         ArgumentNullException.ThrowIfNull(booking);
-        ArgumentNullException.ThrowIfNull(booking.SelectedSectors);
-        var includesFlight = booking.SelectedSectors.Contains(TravelSector.Flight);
-        var itinerary = booking.Itinerary;
-        if (includesFlight && itinerary is null)
-        {
-            throw new ArgumentException(
-                "A flight itinerary is required when the Flight sector is selected.",
-                nameof(booking.Itinerary));
-        }
-
-        TravelClassification? classification = itinerary is null
-            ? null
-            : TravelClassificationService.Classify(itinerary);
-        if (booking.FlightCompany is { } selectedCompany && !Enum.IsDefined(selectedCompany))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(booking.FlightCompany),
-                selectedCompany,
-                "Unknown flight company.");
-        }
-
-        if (booking.ReturnFlightCompany is { } selectedReturnCompany && !Enum.IsDefined(selectedReturnCompany))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(booking.ReturnFlightCompany),
-                selectedReturnCompany,
-                "Unknown return flight company.");
-        }
-
-        if (itinerary is not null)
-        {
-            ValidateReturnFlight(itinerary, includesFlight);
-        }
-
-        if (includesFlight && classification == TravelClassification.Domestic && booking.FlightCompany is null)
-        {
-            throw new ArgumentException("Choose a flight company for a domestic flight.");
-        }
-
-        if (booking.FlightCompany is not null
-            && (!includesFlight || classification != TravelClassification.Domestic))
-        {
-            throw new ArgumentException("A flight company can only be selected for a domestic flight.");
-        }
-
-        var includesReturnFlight = itinerary?.ReturnDepartureLocalDateTime is not null;
-        if (booking.ReturnFlightCompany is not null
-            && (!includesReturnFlight || classification != TravelClassification.Domestic))
-        {
-            throw new ArgumentException("A return flight company can only be selected for a domestic return flight.");
-        }
-
-        var returnFlightCompany = includesReturnFlight && classification == TravelClassification.Domestic
-            ? booking.ReturnFlightCompany ?? booking.FlightCompany
-            : null;
-
         ArgumentNullException.ThrowIfNull(booking.Travelers);
         if (booking.Travelers.Count == 0)
         {
@@ -86,44 +30,7 @@ public sealed class TravelQuoteService
             throw new ArgumentException("Enter a first and last name for every traveler.");
         }
 
-        if (booking.SelectedSectors.Count == 0)
-        {
-            throw new ArgumentException("Select at least one travel sector.");
-        }
-
-        if (booking.SelectedSectors.Distinct().Count() != booking.SelectedSectors.Count)
-        {
-            throw new ArgumentException("Each travel sector can only be selected once.");
-        }
-
-        var includesHotel = booking.SelectedSectors.Contains(TravelSector.Hotel);
-        if (includesHotel && booking.HotelCategory is null)
-        {
-            throw new ArgumentException("Choose a hotel category.");
-        }
-
-        if (!includesHotel && booking.HotelCategory is not null)
-        {
-            throw new ArgumentException("Choose a hotel category only when the Hotel sector is selected.");
-        }
-
-        if (includesHotel && booking.HotelMealOption is null)
-        {
-            throw new ArgumentException("Choose a hotel meal option.");
-        }
-
-        if (!includesHotel && booking.HotelMealOption is not null)
-        {
-            throw new ArgumentException("Choose a hotel meal option only when the Hotel sector is selected.");
-        }
-
-        if (booking.HotelMealOption is { } mealOption && !Enum.IsDefined(mealOption))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(booking.HotelMealOption),
-                mealOption,
-                "Unknown hotel meal option.");
-        }
+        ArgumentNullException.ThrowIfNull(booking.SelectedSectors);
 
         var rates = CorporateDiscountRates();
         var lines = new List<TravelQuoteLine>();
@@ -132,6 +39,109 @@ public sealed class TravelQuoteService
         var customerDiscountCount = 0;
         foreach (var (traveler, travelerIndex) in booking.Travelers.Select((traveler, index) => (traveler, index)))
         {
+            var preferences = traveler.TravelPreferences;
+            var sectors = preferences?.SelectedSectors ?? booking.SelectedSectors;
+            ArgumentNullException.ThrowIfNull(sectors);
+            if (sectors.Count == 0)
+            {
+                throw new ArgumentException($"Select at least one travel sector for traveler {travelerIndex + 1}.");
+            }
+
+            if (sectors.Distinct().Count() != sectors.Count)
+            {
+                throw new ArgumentException(
+                    $"Each travel sector can only be selected once for traveler {travelerIndex + 1}.");
+            }
+
+            var hotelCategory = preferences is null ? booking.HotelCategory : preferences.HotelCategory;
+            var hotelMealOption = preferences is null ? booking.HotelMealOption : preferences.HotelMealOption;
+            var itinerary = preferences is null ? booking.Itinerary : preferences.Itinerary;
+            var flightCompany = preferences is null ? booking.FlightCompany : preferences.FlightCompany;
+            var selectedReturnFlightCompany = preferences is null
+                ? booking.ReturnFlightCompany
+                : preferences.ReturnFlightCompany;
+            var includesFlight = sectors.Contains(TravelSector.Flight);
+            var includesHotel = sectors.Contains(TravelSector.Hotel);
+            if (includesFlight && itinerary is null)
+            {
+                throw new ArgumentException(
+                    $"A flight itinerary is required when traveler {travelerIndex + 1} selects the Flight sector.",
+                    nameof(booking.Itinerary));
+            }
+
+            TravelClassification? classification = itinerary is null
+                ? null
+                : TravelClassificationService.Classify(itinerary);
+            if (flightCompany is { } selectedCompany && !Enum.IsDefined(selectedCompany))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(booking.FlightCompany),
+                    selectedCompany,
+                    "Unknown flight company.");
+            }
+
+            if (selectedReturnFlightCompany is { } selectedReturnCompany && !Enum.IsDefined(selectedReturnCompany))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(booking.ReturnFlightCompany),
+                    selectedReturnCompany,
+                    "Unknown return flight company.");
+            }
+
+            if (itinerary is not null)
+            {
+                ValidateReturnFlight(itinerary, includesFlight);
+            }
+
+            if (includesFlight && classification == TravelClassification.Domestic && flightCompany is null)
+            {
+                throw new ArgumentException($"Choose a flight company for traveler {travelerIndex + 1}'s domestic flight.");
+            }
+
+            if (flightCompany is not null && (!includesFlight || classification != TravelClassification.Domestic))
+            {
+                throw new ArgumentException("A flight company can only be selected for a domestic flight.");
+            }
+
+            var includesReturnFlight = itinerary?.ReturnDepartureLocalDateTime is not null;
+            if (selectedReturnFlightCompany is not null
+                && (!includesReturnFlight || classification != TravelClassification.Domestic))
+            {
+                throw new ArgumentException("A return flight company can only be selected for a domestic return flight.");
+            }
+
+            var returnFlightCompany = includesReturnFlight && classification == TravelClassification.Domestic
+                ? selectedReturnFlightCompany ?? flightCompany
+                : null;
+
+            if (includesHotel && hotelCategory is null)
+            {
+                throw new ArgumentException($"Choose a hotel category for traveler {travelerIndex + 1}.");
+            }
+
+            if (!includesHotel && hotelCategory is not null)
+            {
+                throw new ArgumentException("Choose a hotel category only when the Hotel sector is selected.");
+            }
+
+            if (includesHotel && hotelMealOption is null)
+            {
+                throw new ArgumentException($"Choose a hotel meal option for traveler {travelerIndex + 1}.");
+            }
+
+            if (!includesHotel && hotelMealOption is not null)
+            {
+                throw new ArgumentException("Choose a hotel meal option only when the Hotel sector is selected.");
+            }
+
+            if (hotelMealOption is { } mealOption && !Enum.IsDefined(mealOption))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(booking.HotelMealOption),
+                    mealOption,
+                    "Unknown hotel meal option.");
+            }
+
             var corporateCode = traveler.CorporateCode?.Trim();
             var customerCode = traveler.CustomerCode?.Trim();
             var hasCorporateCode = !string.IsNullOrEmpty(corporateCode);
@@ -150,20 +160,20 @@ public sealed class TravelQuoteService
             corporateCodeCount += hasCorporateCode ? 1 : 0;
             customerCodeCount += hasCustomerCode ? 1 : 0;
 
-            var travelerLines = booking.SelectedSectors
+            var travelerLines = sectors
                 .Select(sector =>
                 {
-                    var hotelCategory = sector == TravelSector.Hotel ? booking.HotelCategory : null;
-                    var hotelMealOption = sector == TravelSector.Hotel ? booking.HotelMealOption : null;
+                    var selectedHotelCategory = sector == TravelSector.Hotel ? hotelCategory : null;
+                    var selectedHotelMealOption = sector == TravelSector.Hotel ? hotelMealOption : null;
                     var unitPrice = _priceCatalog.GetPricePerTraveler(
                         sector,
-                        hotelCategory,
+                        selectedHotelCategory,
                         sector == TravelSector.Flight ? classification : null,
-                        sector == TravelSector.Flight ? booking.FlightCompany : null,
+                        sector == TravelSector.Flight ? flightCompany : null,
                         sector == TravelSector.Flight
                             ? itinerary!.DepartureLocalDateTime
                             : null,
-                        hotelMealOption);
+                        selectedHotelMealOption);
                     if (sector == TravelSector.Flight
                         && itinerary?.ReturnDepartureLocalDateTime is { } returnDeparture)
                     {
@@ -176,8 +186,8 @@ public sealed class TravelQuoteService
 
                     return (
                         Sector: sector,
-                        HotelCategory: hotelCategory,
-                        HotelMealOption: hotelMealOption,
+                        HotelCategory: selectedHotelCategory,
+                        HotelMealOption: selectedHotelMealOption,
                         UnitPrice: unitPrice,
                         Subtotal: Round(unitPrice));
                 })
@@ -219,7 +229,11 @@ public sealed class TravelQuoteService
                     line.Subtotal,
                     rate,
                     discount,
-                    Round(line.Subtotal - discount)));
+                    Round(line.Subtotal - discount),
+                    itinerary,
+                    classification,
+                    flightCompany,
+                    returnFlightCompany));
             }
         }
 
@@ -236,6 +250,15 @@ public sealed class TravelQuoteService
                         ? "Customer codes accepted, but no traveler subtotal is above R15,000."
                         : "No discount codes supplied.";
 
+        var hasTravelerSpecificPreferences = booking.Travelers.Any(traveler => traveler.TravelPreferences is not null);
+        TravelClassification? legacyClassification = booking.Itinerary is null
+            ? null
+            : TravelClassificationService.Classify(booking.Itinerary);
+        var legacyReturnFlightCompany = booking.Itinerary?.ReturnDepartureLocalDateTime is not null
+            && legacyClassification == TravelClassification.Domestic
+            ? booking.ReturnFlightCompany ?? booking.FlightCompany
+            : null;
+
         return new TravelQuote(
             booking.Travelers,
             lines,
@@ -243,10 +266,10 @@ public sealed class TravelQuoteService
             discountTotal,
             total,
             description,
-            itinerary,
-            classification,
-            booking.FlightCompany,
-            returnFlightCompany);
+            hasTravelerSpecificPreferences ? null : booking.Itinerary,
+            hasTravelerSpecificPreferences ? null : legacyClassification,
+            hasTravelerSpecificPreferences ? null : booking.FlightCompany,
+            hasTravelerSpecificPreferences ? null : legacyReturnFlightCompany);
     }
 
     private static IReadOnlyDictionary<TravelSector, decimal> CorporateDiscountRates() =>

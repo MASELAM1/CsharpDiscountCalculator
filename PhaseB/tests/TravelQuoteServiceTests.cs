@@ -111,6 +111,50 @@ public class TravelQuoteServiceTests
     }
 
     [Fact]
+    public void Calculate_UsesEachTravelersOwnSectorsAndItinerary()
+    {
+        var domesticItinerary = TestItinerary("JNB", "CPT");
+        var internationalItinerary = TestItinerary("JNB", "LHR");
+        var travelers = new[]
+        {
+            new Traveler(
+                "Amina",
+                "Ndlovu",
+                TravelPreferences: new TravelerTravelPreferences(
+                    [TravelSector.Flight],
+                    Itinerary: domesticItinerary,
+                    FlightCompany: FlightCompany.SAA)),
+            new Traveler(
+                "Lebo",
+                "Mokoena",
+                TravelPreferences: new TravelerTravelPreferences(
+                    [TravelSector.Flight, TravelSector.Car],
+                    Itinerary: internationalItinerary)),
+            new Traveler(
+                "Thabo",
+                "Dlamini",
+                TravelPreferences: new TravelerTravelPreferences([TravelSector.Parking]))
+        };
+
+        var quote = new TravelQuoteService().Calculate(new TravelBooking(
+            travelers,
+            [],
+            null,
+            null));
+
+        Assert.Equal(
+            [TravelSector.Flight, TravelSector.Flight, TravelSector.Car, TravelSector.Parking],
+            quote.Lines.Select(line => line.Sector));
+        Assert.Equal(
+            [domesticItinerary, internationalItinerary, internationalItinerary, null],
+            quote.Lines.Select(line => line.Itinerary));
+        Assert.Equal(
+            [TravelClassification.Domestic, TravelClassification.International, TravelClassification.International, null],
+            quote.Lines.Select(line => line.Classification));
+        Assert.Equal([3_500m, 7_500m, 1_800m, 300m], quote.Lines.Select(line => line.UnitPrice));
+    }
+
+    [Fact]
     public void Calculate_CorporateCodeTakesPrecedenceForThatTraveler()
     {
         var service = CreateService(10_000m);

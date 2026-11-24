@@ -20,10 +20,12 @@ dotnet run --project PhaseB/CsharpDiscountCalculator.PhaseB.csproj -- --browser
 
 ## Itinerary classification
 
-Select the Flight sector to show the itinerary fields for origin, destination,
-and departure and arrival date/time. The displayed times are local times at
-their respective airports; they are retained for the quote and do not affect
-classification. Non-flight bookings do not require an itinerary.
+Select sectors separately for each traveler. The Flight sector displays that
+traveler's itinerary fields for origin, destination, and departure and arrival
+date/time; other travelers can select different sectors and enter different
+routes and dates. A flight itinerary is required only for travelers who select
+Flight. The displayed times are local times at their respective airports; they
+are retained for the quote and do not affect classification.
 
 - A route within one country is **Domestic**.
 - A route between two SADC countries is **Regional**.
@@ -47,9 +49,9 @@ The airport-to-country mapping is maintained in
 `Services/DomesticFlightRouteCatalog.cs`.
 The browser displays route-country flags beside the trip type and quote
 classification. Flag images load from FlagCDN and require an internet connection.
-When Flight is selected, the browser can include a return flight on the
-reverse route. Enter its departure and arrival local times; the return leg is
-priced as another one-way fare, with the domestic departure-time surcharge
+For each traveler selecting Flight, the browser can include a return flight on
+the reverse route. Enter its departure and arrival local times; the return leg
+is priced as another one-way fare, with the domestic departure-time surcharge
 applied independently to each leg. For domestic round trips, choose the
 outbound and return flight companies separately; each leg is priced using its
 own company and departure time.

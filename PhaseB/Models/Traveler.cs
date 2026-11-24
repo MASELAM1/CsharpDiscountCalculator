@@ -4,4 +4,5 @@ public sealed record Traveler(
     string FirstName,
     string LastName,
     string? CorporateCode = null,
-    string? CustomerCode = null);
+    string? CustomerCode = null,
+    TravelerTravelPreferences? TravelPreferences = null);

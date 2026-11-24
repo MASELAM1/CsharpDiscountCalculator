@@ -9,4 +9,8 @@ public sealed record TravelQuoteLine(
     decimal Subtotal,
     decimal DiscountRate,
     decimal DiscountAmount,
-    decimal Total);
+    decimal Total,
+    TravelItinerary? Itinerary = null,
+    TravelClassification? Classification = null,
+    FlightCompany? FlightCompany = null,
+    FlightCompany? ReturnFlightCompany = null);
