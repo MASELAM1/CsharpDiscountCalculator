@@ -86,73 +86,6 @@ public static class BrowserUI
                     throw new ArgumentException("Enter a first and last name for every traveler.");
                 }
 
-                if (!DateTime.TryParseExact(
-                    departureDateTimeInput,
-                    "yyyy-MM-dd'T'HH:mm",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var departureDateTime))
-                {
-                    throw new FormatException("Enter a valid departure date and time.");
-                }
-
-                if (!DateTime.TryParseExact(
-                    arrivalDateTimeInput,
-                    "yyyy-MM-dd'T'HH:mm",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var arrivalDateTime))
-                {
-                    throw new FormatException("Enter a valid arrival date and time.");
-                }
-
-                DateTime? returnDepartureDateTime = null;
-                DateTime? returnArrivalDateTime = null;
-                if (returnFlightInput)
-                {
-                    if (!DateTime.TryParseExact(
-                        returnDepartureDateTimeInput,
-                        "yyyy-MM-dd'T'HH:mm",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out var parsedReturnDepartureDateTime))
-                    {
-                        throw new FormatException("Enter a valid return departure date and time.");
-                    }
-
-                    if (!DateTime.TryParseExact(
-                        returnArrivalDateTimeInput,
-                        "yyyy-MM-dd'T'HH:mm",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out var parsedReturnArrivalDateTime))
-                    {
-                        throw new FormatException("Enter a valid return arrival date and time.");
-                    }
-
-                    returnDepartureDateTime = parsedReturnDepartureDateTime;
-                    returnArrivalDateTime = parsedReturnArrivalDateTime;
-                }
-
-                if (!Enum.TryParse<TravelClassification>(
-                    travelClassificationInput,
-                    true,
-                    out var selectedClassification)
-                    || !Enum.IsDefined(selectedClassification))
-                {
-                    throw new FormatException("Choose a supported trip type.");
-                }
-
-                itinerary = new TravelItinerary(
-                    originAirportCodeInput,
-                    destinationAirportCodeInput,
-                    departureDateTime,
-                    arrivalDateTime,
-                    connectionAirportCodeInput,
-                    returnDepartureDateTime,
-                    returnArrivalDateTime);
-                TravelClassificationService.ValidateSelection(selectedClassification, itinerary);
-
                 foreach (var sectorValue in form["sectors"])
                 {
                     if (!Enum.TryParse<TravelSector>(sectorValue, true, out var sector) || !Enum.IsDefined(sector))
@@ -161,6 +94,82 @@ public static class BrowserUI
                     }
 
                     selectedSectors.Add(sector);
+                }
+
+                var includesFlight = selectedSectors.Contains(TravelSector.Flight);
+                if (!includesFlight && returnFlightInput)
+                {
+                    throw new ArgumentException("A return flight can only be selected when the Flight sector is selected.");
+                }
+
+                if (includesFlight)
+                {
+                    if (!DateTime.TryParseExact(
+                        departureDateTimeInput,
+                        "yyyy-MM-dd'T'HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var departureDateTime))
+                    {
+                        throw new FormatException("Enter a valid departure date and time.");
+                    }
+
+                    if (!DateTime.TryParseExact(
+                        arrivalDateTimeInput,
+                        "yyyy-MM-dd'T'HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var arrivalDateTime))
+                    {
+                        throw new FormatException("Enter a valid arrival date and time.");
+                    }
+
+                    if (!Enum.TryParse<TravelClassification>(
+                        travelClassificationInput,
+                        true,
+                        out var selectedClassification)
+                        || !Enum.IsDefined(selectedClassification))
+                    {
+                        throw new FormatException("Choose a supported trip type.");
+                    }
+
+                    DateTime? returnDepartureDateTime = null;
+                    DateTime? returnArrivalDateTime = null;
+                    if (returnFlightInput)
+                    {
+                        if (!DateTime.TryParseExact(
+                            returnDepartureDateTimeInput,
+                            "yyyy-MM-dd'T'HH:mm",
+                            CultureInfo.InvariantCulture,
+                            DateTimeStyles.None,
+                            out var parsedReturnDepartureDateTime))
+                        {
+                            throw new FormatException("Enter a valid return departure date and time.");
+                        }
+
+                        if (!DateTime.TryParseExact(
+                            returnArrivalDateTimeInput,
+                            "yyyy-MM-dd'T'HH:mm",
+                            CultureInfo.InvariantCulture,
+                            DateTimeStyles.None,
+                            out var parsedReturnArrivalDateTime))
+                        {
+                            throw new FormatException("Enter a valid return arrival date and time.");
+                        }
+
+                        returnDepartureDateTime = parsedReturnDepartureDateTime;
+                        returnArrivalDateTime = parsedReturnArrivalDateTime;
+                    }
+
+                    itinerary = new TravelItinerary(
+                        originAirportCodeInput,
+                        destinationAirportCodeInput,
+                        departureDateTime,
+                        arrivalDateTime,
+                        connectionAirportCodeInput,
+                        returnDepartureDateTime,
+                        returnArrivalDateTime);
+                    TravelClassificationService.ValidateSelection(selectedClassification, itinerary);
                 }
 
                 if (!string.IsNullOrWhiteSpace(flightCompanyInput))
@@ -393,7 +402,9 @@ public static class BrowserUI
                 .Append("\" placeholder=\"ABC333\"><button type=\"button\" class=\"remove-traveler\">Remove traveler</button></fieldset>");
         }
 
-        html.Append("<fieldset><legend>Flight itinerary</legend><p class=\"hint\">Choose a trip type to filter the airport selectors. Domestic + International represents a domestic leg followed by an international leg. Route options are a static list and do not provide live schedules.</p>");
+        html.Append("<fieldset id=\"flight-itinerary-fieldset\"")
+            .Append(flightSelected ? string.Empty : " hidden disabled")
+            .Append("><legend>Flight itinerary</legend><p class=\"hint\">Choose a trip type to filter the airport selectors. Domestic + International represents a domestic leg followed by an international leg. Route options are a static list and do not provide live schedules.</p>");
         AppendTravelClassificationSelect(html, travelClassificationInput);
         html.Append("<div id=\"domestic-route-field\">");
         AppendDomesticRouteSelect(html, originAirportCodeInput, destinationAirportCodeInput);
@@ -555,13 +566,17 @@ public static class BrowserUI
                 .Append("""
                       </p>
                     </div>
+                """);
+            if (quote.Itinerary is { } quoteItinerary && quote.Classification is { } quoteClassification)
+            {
+                html.Append("""
                     <div class="quote-classification">
                       <span>Trip type</span><strong>
-                """)
-                .Append(HtmlEncoder.Default.Encode(quote.Classification.ToDisplayName()));
-            html.Append("</strong>");
-            AppendCountryFlags(html, quote.Itinerary);
-            html.Append("""
+                    """)
+                    .Append(HtmlEncoder.Default.Encode(quoteClassification.ToDisplayName()))
+                    .Append("</strong>");
+                AppendCountryFlags(html, quoteItinerary);
+                html.Append("""
                     </div>
                   </header>
                   <section class="itinerary-summary" aria-labelledby="itinerary-title">
@@ -569,46 +584,49 @@ public static class BrowserUI
                     <dl class="itinerary-grid">
                       <div><dt>Outbound route</dt><dd>
                 """)
-                .Append(HtmlEncoder.Default.Encode(FormatRoute(quote.Itinerary)))
-                .Append("</dd></div><div><dt>Departure (local)</dt><dd>")
-                .Append(FormatDateTime(quote.Itinerary.DepartureLocalDateTime))
-                .Append("</dd></div><div><dt>Arrival (local)</dt><dd>")
-                .Append(FormatDateTime(quote.Itinerary.ArrivalLocalDateTime))
-                .Append("</dd></div>");
-            if (quote.FlightCompany is { } quoteFlightCompany)
-            {
-                html.Append("<div><dt>Outbound airline</dt><dd>")
-                    .Append(HtmlEncoder.Default.Encode(quoteFlightCompany.ToString()))
+                    .Append(HtmlEncoder.Default.Encode(FormatRoute(quoteItinerary)))
+                    .Append("</dd></div><div><dt>Departure (local)</dt><dd>")
+                    .Append(FormatDateTime(quoteItinerary.DepartureLocalDateTime))
+                    .Append("</dd></div><div><dt>Arrival (local)</dt><dd>")
+                    .Append(FormatDateTime(quoteItinerary.ArrivalLocalDateTime))
                     .Append("</dd></div>");
+                if (quote.FlightCompany is { } quoteFlightCompany)
+                {
+                    html.Append("<div><dt>Outbound airline</dt><dd>")
+                        .Append(HtmlEncoder.Default.Encode(quoteFlightCompany.ToString()))
+                        .Append("</dd></div>");
+                }
+
+                if (quote.ReturnFlightCompany is { } quoteReturnFlightCompany)
+                {
+                    html.Append("<div><dt>Return airline</dt><dd>")
+                        .Append(HtmlEncoder.Default.Encode(quoteReturnFlightCompany.ToString()))
+                        .Append("</dd></div>");
+                }
+
+                if (quoteItinerary.ReturnDepartureLocalDateTime is { } returnDeparture
+                    && quoteItinerary.ReturnArrivalLocalDateTime is { } returnArrival)
+                {
+                    html.Append("<div><dt>Return route</dt><dd>")
+                        .Append(HtmlEncoder.Default.Encode(FormatReturnRoute(quoteItinerary)))
+                        .Append("</dd></div><div><dt>Return departure (local)</dt><dd>")
+                        .Append(FormatDateTime(returnDeparture))
+                        .Append("</dd></div><div><dt>Return arrival (local)</dt><dd>")
+                        .Append(FormatDateTime(returnArrival))
+                        .Append("</dd></div>");
+                }
+
+                html.Append("</dl></section>");
             }
 
-            if (quote.ReturnFlightCompany is { } quoteReturnFlightCompany)
-            {
-                html.Append("<div><dt>Return airline</dt><dd>")
-                    .Append(HtmlEncoder.Default.Encode(quoteReturnFlightCompany.ToString()))
-                    .Append("</dd></div>");
-            }
-
-            if (quote.Itinerary.ReturnDepartureLocalDateTime is { } returnDeparture
-                && quote.Itinerary.ReturnArrivalLocalDateTime is { } returnArrival)
-            {
-                html.Append("<div><dt>Return route</dt><dd>")
-                    .Append(HtmlEncoder.Default.Encode(FormatReturnRoute(quote.Itinerary)))
-                    .Append("</dd></div><div><dt>Return departure (local)</dt><dd>")
-                    .Append(FormatDateTime(returnDeparture))
-                    .Append("</dd></div><div><dt>Return arrival (local)</dt><dd>")
-                    .Append(FormatDateTime(returnArrival))
-                    .Append("</dd></div>");
-            }
-
-            html.Append("</dl></section>");
+            html.Append("</header>");
             foreach (var sectorLines in quote.Lines.GroupBy(line => line.Sector))
             {
                 var firstLine = sectorLines.First();
                 var sectorName = firstLine.Sector == TravelSector.Hotel
                     ? $"Hotel ({firstLine.HotelCategory!.Value.ToDisplayName()}, {firstLine.HotelMealOption!.Value.ToDisplayName()})"
                     : firstLine.Sector == TravelSector.Flight
-                        && quote.Itinerary.ReturnDepartureLocalDateTime is not null
+                        && quote.Itinerary?.ReturnDepartureLocalDateTime is not null
                             ? "Flight (round trip)"
                             : firstLine.Sector.ToString();
                 html.Append("<section class=\"sector-quote\"><h3>")
@@ -691,6 +709,7 @@ public static class BrowserUI
                   const addButton = document.getElementById('add-traveler');
                   const hotelCheckbox = document.getElementById('sector-Hotel');
                   const flightCheckbox = document.getElementById('sector-Flight');
+                  const flightItineraryFieldset = document.getElementById('flight-itinerary-fieldset');
                   const hotelCategory = document.getElementById('hotel-category');
                   const hotelMealOption = document.getElementById('hotel-meal-option');
                   const flightCompanyField = document.getElementById('flight-company-field');
@@ -783,6 +802,11 @@ public static class BrowserUI
                     flightCompany.required = needed;
                   }
 
+                  function updateFlightItinerary() {
+                    flightItineraryFieldset.hidden = !flightCheckbox.checked;
+                    flightItineraryFieldset.disabled = !flightCheckbox.checked;
+                  }
+
                   function updateReturnFlight() {
                     const flightSelected = flightCheckbox.checked;
                     const returnSelected = flightSelected && returnFlight.checked;
@@ -805,6 +829,7 @@ public static class BrowserUI
                   destinationAirport.addEventListener('change', updateAirportOptions);
                   travelClassification.addEventListener('change', updateFlightCompany);
                   travelClassification.addEventListener('change', updateReturnFlight);
+                  flightCheckbox.addEventListener('change', updateFlightItinerary);
                   flightCheckbox.addEventListener('change', updateFlightCompany);
                   flightCheckbox.addEventListener('change', updateReturnFlight);
                   returnFlight.addEventListener('change', updateReturnFlight);
@@ -818,6 +843,7 @@ public static class BrowserUI
                     updateFlightCompany();
                   });
                   updateAirportOptions();
+                  updateFlightItinerary();
                   updateReturnFlight();
 
                   addButton.addEventListener('click', () => {

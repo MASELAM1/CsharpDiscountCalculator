@@ -7,7 +7,7 @@ public sealed record TravelQuote(
     decimal DiscountAmount,
     decimal Total,
     string DiscountDescription,
-    TravelItinerary Itinerary,
-    TravelClassification Classification,
+    TravelItinerary? Itinerary,
+    TravelClassification? Classification,
     FlightCompany? FlightCompany,
     FlightCompany? ReturnFlightCompany = null);

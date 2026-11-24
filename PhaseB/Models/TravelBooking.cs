@@ -4,7 +4,7 @@ public sealed record TravelBooking(
     IReadOnlyList<Traveler> Travelers,
     IReadOnlyList<TravelSector> SelectedSectors,
     HotelCategory? HotelCategory,
-    TravelItinerary Itinerary,
+    TravelItinerary? Itinerary,
     FlightCompany? FlightCompany = null,
     FlightCompany? ReturnFlightCompany = null,
     HotelMealOption? HotelMealOption = null);

@@ -20,9 +20,10 @@ dotnet run --project PhaseB/CsharpDiscountCalculator.PhaseB.csproj -- --browser
 
 ## Itinerary classification
 
-Every booking includes an origin airport, destination airport, and departure
-and arrival date/time. The displayed times are local times at their respective
-airports; they are retained for the quote and do not affect classification.
+Select the Flight sector to show the itinerary fields for origin, destination,
+and departure and arrival date/time. The displayed times are local times at
+their respective airports; they are retained for the quote and do not affect
+classification. Non-flight bookings do not require an itinerary.
 
 - A route within one country is **Domestic**.
 - A route between two SADC countries is **Regional**.

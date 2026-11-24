@@ -29,6 +29,33 @@ public class TravelQuoteServiceTests
     }
 
     [Fact]
+    public void Calculate_AllowsNonFlightBookingWithoutItinerary()
+    {
+        var quote = new TravelQuoteService().Calculate(new TravelBooking(
+            [new Traveler("Amina", "Ndlovu")],
+            [TravelSector.Car],
+            null,
+            null));
+
+        Assert.Null(quote.Itinerary);
+        Assert.Null(quote.Classification);
+        Assert.Equal(1_800m, quote.Total);
+    }
+
+    [Fact]
+    public void Calculate_RequiresItineraryWhenFlightIsSelected()
+    {
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new TravelQuoteService().Calculate(new TravelBooking(
+                [new Traveler("Amina", "Ndlovu")],
+                [TravelSector.Flight],
+                null,
+                null)));
+
+        Assert.Contains("itinerary is required", exception.Message);
+    }
+
+    [Fact]
     public void Calculate_AppliesCustomerDiscountWhenTravelerSubtotalExceedsThreshold()
     {
         var service = CreateService(7_550m);

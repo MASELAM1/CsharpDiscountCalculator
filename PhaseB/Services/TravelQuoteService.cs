@@ -16,8 +16,19 @@ public sealed class TravelQuoteService
     public TravelQuote Calculate(TravelBooking booking)
     {
         ArgumentNullException.ThrowIfNull(booking);
-        ArgumentNullException.ThrowIfNull(booking.Itinerary);
-        var classification = TravelClassificationService.Classify(booking.Itinerary);
+        ArgumentNullException.ThrowIfNull(booking.SelectedSectors);
+        var includesFlight = booking.SelectedSectors.Contains(TravelSector.Flight);
+        var itinerary = booking.Itinerary;
+        if (includesFlight && itinerary is null)
+        {
+            throw new ArgumentException(
+                "A flight itinerary is required when the Flight sector is selected.",
+                nameof(booking.Itinerary));
+        }
+
+        TravelClassification? classification = itinerary is null
+            ? null
+            : TravelClassificationService.Classify(itinerary);
         if (booking.FlightCompany is { } selectedCompany && !Enum.IsDefined(selectedCompany))
         {
             throw new ArgumentOutOfRangeException(
@@ -34,9 +45,11 @@ public sealed class TravelQuoteService
                 "Unknown return flight company.");
         }
 
-        ArgumentNullException.ThrowIfNull(booking.SelectedSectors);
-        var includesFlight = booking.SelectedSectors.Contains(TravelSector.Flight);
-        ValidateReturnFlight(booking.Itinerary, includesFlight);
+        if (itinerary is not null)
+        {
+            ValidateReturnFlight(itinerary, includesFlight);
+        }
+
         if (includesFlight && classification == TravelClassification.Domestic && booking.FlightCompany is null)
         {
             throw new ArgumentException("Choose a flight company for a domestic flight.");
@@ -48,7 +61,7 @@ public sealed class TravelQuoteService
             throw new ArgumentException("A flight company can only be selected for a domestic flight.");
         }
 
-        var includesReturnFlight = booking.Itinerary.ReturnDepartureLocalDateTime is not null;
+        var includesReturnFlight = itinerary?.ReturnDepartureLocalDateTime is not null;
         if (booking.ReturnFlightCompany is not null
             && (!includesReturnFlight || classification != TravelClassification.Domestic))
         {
@@ -147,10 +160,12 @@ public sealed class TravelQuoteService
                         hotelCategory,
                         sector == TravelSector.Flight ? classification : null,
                         sector == TravelSector.Flight ? booking.FlightCompany : null,
-                        sector == TravelSector.Flight ? booking.Itinerary.DepartureLocalDateTime : null,
+                        sector == TravelSector.Flight
+                            ? itinerary!.DepartureLocalDateTime
+                            : null,
                         hotelMealOption);
                     if (sector == TravelSector.Flight
-                        && booking.Itinerary.ReturnDepartureLocalDateTime is { } returnDeparture)
+                        && itinerary?.ReturnDepartureLocalDateTime is { } returnDeparture)
                     {
                         unitPrice += _priceCatalog.GetPricePerTraveler(
                             sector,
@@ -228,7 +243,7 @@ public sealed class TravelQuoteService
             discountTotal,
             total,
             description,
-            booking.Itinerary,
+            itinerary,
             classification,
             booking.FlightCompany,
             returnFlightCompany);
