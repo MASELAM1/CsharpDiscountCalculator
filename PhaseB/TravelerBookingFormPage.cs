@@ -20,26 +20,30 @@ internal static class TravelerBookingFormPage
         var lastNames = form["lastNames"].ToArray();
         var corporateCodes = form["corporateCodes"].ToArray();
         var customerCodes = form["customerCodes"].ToArray();
+        var frequentFlyerCodes = form["frequentFlyerCodes"].ToArray();
         var travelerCount = new[]
         {
             firstNames.Length,
             lastNames.Length,
             corporateCodes.Length,
-            customerCodes.Length
+            customerCodes.Length,
+            frequentFlyerCodes.Length
         }.Max();
         var travelers = Enumerable.Range(0, travelerCount)
             .Select(index => new Traveler(
                 ValueAt(firstNames, index),
                 ValueAt(lastNames, index),
                 ValueAt(corporateCodes, index),
-                ValueAt(customerCodes, index)))
+                ValueAt(customerCodes, index),
+                FrequentFlyerCode: ValueAt(frequentFlyerCodes, index)))
             .ToArray();
 
         try
         {
             if (firstNames.Length != lastNames.Length
                 || corporateCodes.Length != travelerCount
-                || customerCodes.Length != travelerCount)
+                || customerCodes.Length != travelerCount
+                || frequentFlyerCodes.Length != travelerCount)
             {
                 throw new ArgumentException("Enter a first and last name for every traveler.");
             }
@@ -393,7 +397,14 @@ internal static class TravelerBookingFormPage
             .Append("<label for=\"customer-code-").Append(index).Append("\">Customer code</label>")
             .Append("<input id=\"customer-code-").Append(index).Append("\" name=\"customerCodes\" type=\"text\" value=\"")
             .Append(Encode(Value(form, "customerCodes", traveler.CustomerCode ?? string.Empty, index)))
-            .Append("\" placeholder=\"ABC333\"><p>Select sectors</p><div class=\"sectors\">");
+            .Append("\" placeholder=\"ABC333\">")
+            .Append("<label for=\"frequent-flyer-code-").Append(index).Append("\">Frequent-flyer code</label>")
+            .Append("<input id=\"frequent-flyer-code-").Append(index)
+            .Append("\" name=\"frequentFlyerCodes\" type=\"text\" value=\"")
+            .Append(Encode(Value(form, "frequentFlyerCodes", traveler.FrequentFlyerCode ?? string.Empty, index)))
+            .Append("\" placeholder=\"ZAA989343FR\">")
+            .Append("<small>12% off domestic flights; 20% off regional and international flights.</small>")
+            .Append("<p>Select sectors</p><div class=\"sectors\">");
         foreach (var sector in Enum.GetValues<TravelSector>())
         {
             var checkedValue = IsSectorSelected(form, index, sector, sectors) ? " checked" : string.Empty;

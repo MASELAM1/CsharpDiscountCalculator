@@ -172,6 +172,115 @@ public class TravelQuoteServiceTests
         Assert.Contains("not stacked", quote.DiscountDescription);
     }
 
+    [Theory]
+    [InlineData("JNB", "CPT", 0.12, 420)]
+    [InlineData("JNB", "WDH", 0.20, 1_200)]
+    [InlineData("JNB", "LHR", 0.20, 1_500)]
+    public void Calculate_AppliesFrequentFlyerDiscountByFlightClassification(
+        string origin,
+        string destination,
+        decimal expectedRate,
+        decimal expectedDiscount)
+    {
+        var traveler = new Traveler("Amina", "Ndlovu", FrequentFlyerCode: "ZAA989343FR");
+        var itinerary = TestItinerary(origin, destination);
+        var flightCompany = TravelClassificationService.Classify(itinerary) == TravelClassification.Domestic
+            ? FlightCompany.SAA
+            : (FlightCompany?)null;
+
+        var quote = new TravelQuoteService().Calculate(new TravelBooking(
+            [traveler],
+            [TravelSector.Flight],
+            null,
+            itinerary,
+            flightCompany));
+
+        Assert.Equal(expectedRate, quote.Lines.Single().DiscountRate);
+        Assert.Equal(expectedDiscount, quote.DiscountAmount);
+    }
+
+    [Fact]
+    public void Calculate_FrequentFlyerCodeTakesPrecedenceOverCustomerCode()
+    {
+        var service = CreateService(20_000m);
+        var traveler = new Traveler(
+            "Amina",
+            "Ndlovu",
+            CustomerCode: "ABC333",
+            FrequentFlyerCode: "ZAA989343FR");
+
+        var quote = service.Calculate(new TravelBooking(
+            [traveler],
+            [TravelSector.Flight, TravelSector.Car],
+            null,
+            TestItinerary(),
+            FlightCompany.SAA));
+
+        Assert.Equal([2_400m, 0m], quote.Lines.Select(line => line.DiscountAmount));
+        Assert.Equal(2_400m, quote.DiscountAmount);
+    }
+
+    [Fact]
+    public void Calculate_CorporateCodeTakesPrecedenceOverFrequentFlyerCode()
+    {
+        var service = CreateService(20_000m);
+        var traveler = new Traveler(
+            "Amina",
+            "Ndlovu",
+            "111ZAA",
+            FrequentFlyerCode: "ZAA989343FR");
+
+        var quote = service.Calculate(new TravelBooking(
+            [traveler],
+            [TravelSector.Flight, TravelSector.Car],
+            null,
+            TestItinerary(),
+            FlightCompany.SAA));
+
+        Assert.Equal([2_000m, 1_600m], quote.Lines.Select(line => line.DiscountAmount));
+    }
+
+    [Fact]
+    public void Calculate_DoesNotApplyFrequentFlyerDiscountToDomesticAndInternationalItinerary()
+    {
+        var traveler = new Traveler("Amina", "Ndlovu", FrequentFlyerCode: "ZAA989343FR");
+        var itinerary = new TravelItinerary(
+            "JNB",
+            "LHR",
+            new DateTime(2026, 1, 1, 8, 0, 0),
+            new DateTime(2026, 1, 1, 10, 0, 0),
+            "CPT");
+
+        var quote = new TravelQuoteService().Calculate(new TravelBooking(
+            [traveler],
+            [TravelSector.Flight],
+            null,
+            itinerary));
+
+        Assert.Equal(TravelClassification.DomesticAndInternational, quote.Lines.Single().Classification);
+        Assert.Equal(0m, quote.DiscountAmount);
+    }
+
+    [Fact]
+    public void Calculate_RejectsFrequentFlyerCodeReusedByTravelers()
+    {
+        var travelers = new[]
+        {
+            new Traveler("Amina", "Ndlovu", FrequentFlyerCode: "ZAA989343FR"),
+            new Traveler("Lebo", "Mokoena", FrequentFlyerCode: "zaa989343fr")
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new TravelQuoteService().Calculate(new TravelBooking(
+                travelers,
+                [TravelSector.Flight],
+                null,
+                TestItinerary(),
+                FlightCompany.SAA)));
+
+        Assert.Contains("unique frequent-flyer code", exception.Message);
+    }
+
     [Fact]
     public void Calculate_UsesEachTravelerSubtotalForCustomerThreshold()
     {
@@ -328,6 +437,33 @@ public class TravelQuoteServiceTests
     [InlineData("111ZAA", false)]
     public void DiscountCodeValidator_ValidatesCustomerCodeFormat(string code, bool expected) =>
         Assert.Equal(expected, DiscountCodeValidator.IsCustomerCode(code));
+
+    [Theory]
+    [InlineData("ZAA989343FR", true)]
+    [InlineData("zaa989343fr", true)]
+    [InlineData("ZAA12345FR", false)]
+    [InlineData("ZAA1234567FR", false)]
+    [InlineData("ZAB123456FR", false)]
+    [InlineData("ZAA123456FX", false)]
+    [InlineData("ZAA12A456FR", false)]
+    public void DiscountCodeValidator_ValidatesFrequentFlyerCodeFormat(string code, bool expected) =>
+        Assert.Equal(expected, DiscountCodeValidator.IsFrequentFlyerCode(code));
+
+    [Fact]
+    public void Calculate_RejectsInvalidFrequentFlyerCode()
+    {
+        var traveler = new Traveler("Amina", "Ndlovu", FrequentFlyerCode: "ZAA12345FR");
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new TravelQuoteService().Calculate(new TravelBooking(
+                [traveler],
+                [TravelSector.Flight],
+                null,
+                TestItinerary(),
+                FlightCompany.SAA)));
+
+        Assert.Contains("invalid frequent-flyer code", exception.Message);
+    }
 
     [Fact]
     public void Calculate_RejectsInvalidCorporateCode()

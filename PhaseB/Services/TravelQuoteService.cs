@@ -37,6 +37,17 @@ public sealed class TravelQuoteService
         var customerCodeCount = 0;
         var corporateCodeCount = 0;
         var customerDiscountCount = 0;
+        var frequentFlyerCodeCount = 0;
+        var frequentFlyerDiscountCount = 0;
+        var frequentFlyerCodes = booking.Travelers
+            .Select(traveler => traveler.FrequentFlyerCode?.Trim())
+            .Where(code => !string.IsNullOrEmpty(code))
+            .ToArray();
+        if (frequentFlyerCodes.Distinct(StringComparer.OrdinalIgnoreCase).Count() != frequentFlyerCodes.Length)
+        {
+            throw new ArgumentException("Each traveler must have a unique frequent-flyer code.");
+        }
+
         foreach (var (traveler, travelerIndex) in booking.Travelers.Select((traveler, index) => (traveler, index)))
         {
             var preferences = traveler.TravelPreferences;
@@ -144,8 +155,10 @@ public sealed class TravelQuoteService
 
             var corporateCode = traveler.CorporateCode?.Trim();
             var customerCode = traveler.CustomerCode?.Trim();
+            var frequentFlyerCode = traveler.FrequentFlyerCode?.Trim();
             var hasCorporateCode = !string.IsNullOrEmpty(corporateCode);
             var hasCustomerCode = !string.IsNullOrEmpty(customerCode);
+            var hasFrequentFlyerCode = !string.IsNullOrEmpty(frequentFlyerCode);
 
             if (hasCorporateCode && !DiscountCodeValidator.IsCorporateCode(corporateCode))
             {
@@ -157,8 +170,14 @@ public sealed class TravelQuoteService
                 throw new ArgumentException($"Traveler {travelerIndex + 1} has an invalid customer code.");
             }
 
+            if (hasFrequentFlyerCode && !DiscountCodeValidator.IsFrequentFlyerCode(frequentFlyerCode))
+            {
+                throw new ArgumentException($"Traveler {travelerIndex + 1} has an invalid frequent-flyer code.");
+            }
+
             corporateCodeCount += hasCorporateCode ? 1 : 0;
             customerCodeCount += hasCustomerCode ? 1 : 0;
+            frequentFlyerCodeCount += hasFrequentFlyerCode ? 1 : 0;
 
             var travelerLines = sectors
                 .Select(sector =>
@@ -193,7 +212,13 @@ public sealed class TravelQuoteService
                 })
                 .ToArray();
             var travelerSubtotal = Round(travelerLines.Sum(line => line.Subtotal));
+            var hasFrequentFlyerDiscount = hasFrequentFlyerCode
+                && travelerLines.Any(line =>
+                    line.Sector == TravelSector.Flight
+                    && FrequentFlyerDiscountRate(classification) > 0m);
+            frequentFlyerDiscountCount += hasFrequentFlyerDiscount ? 1 : 0;
             var hasCustomerDiscount = !hasCorporateCode
+                && !hasFrequentFlyerDiscount
                 && hasCustomerCode
                 && travelerSubtotal > CustomerDiscountMinimumSubtotal;
             var travelerCustomerDiscount = hasCustomerDiscount
@@ -205,19 +230,30 @@ public sealed class TravelQuoteService
             for (var lineIndex = 0; lineIndex < travelerLines.Length; lineIndex++)
             {
                 var line = travelerLines[lineIndex];
-                var rate = hasCorporateCode
-                    ? rates[line.Sector]
-                    : hasCustomerDiscount ? CustomerDiscountRate : 0m;
-                var discount = hasCorporateCode
-                    ? Round(line.Subtotal * rate)
-                    : hasCustomerDiscount && lineIndex == travelerLines.Length - 1
-                        ? travelerCustomerDiscount - allocatedCustomerDiscount
-                        : hasCustomerDiscount
-                            ? Round(travelerCustomerDiscount * line.Subtotal / travelerSubtotal)
-                            : 0m;
-                if (!hasCorporateCode && hasCustomerDiscount)
+                decimal rate;
+                decimal discount;
+                if (hasCorporateCode)
                 {
+                    rate = rates[line.Sector];
+                    discount = Round(line.Subtotal * rate);
+                }
+                else if (hasFrequentFlyerDiscount && line.Sector == TravelSector.Flight)
+                {
+                    rate = FrequentFlyerDiscountRate(classification);
+                    discount = Round(line.Subtotal * rate);
+                }
+                else if (hasCustomerDiscount)
+                {
+                    rate = CustomerDiscountRate;
+                    discount = lineIndex == travelerLines.Length - 1
+                        ? travelerCustomerDiscount - allocatedCustomerDiscount
+                        : Round(travelerCustomerDiscount * line.Subtotal / travelerSubtotal);
                     allocatedCustomerDiscount += discount;
+                }
+                else
+                {
+                    rate = 0m;
+                    discount = 0m;
                 }
 
                 lines.Add(new TravelQuoteLine(
@@ -240,10 +276,20 @@ public sealed class TravelQuoteService
         var subtotalTotal = Round(lines.Sum(line => line.Subtotal));
         var discountTotal = Round(lines.Sum(line => line.DiscountAmount));
         var total = Round(lines.Sum(line => line.Total));
-        var description = corporateCodeCount > 0 && customerCodeCount > 0
-            ? "Individual discounts applied by traveler; corporate discounts take precedence and are not stacked with customer discounts."
+        var hasMultipleDiscountCodeTypes = new[]
+        {
+            corporateCodeCount > 0,
+            frequentFlyerCodeCount > 0,
+            customerCodeCount > 0
+        }.Count(hasCodes => hasCodes) > 1;
+        var description = hasMultipleDiscountCodeTypes
+            ? "Discount codes are evaluated per traveler in this order: corporate, frequent-flyer, then customer. Discounts are not stacked."
             : corporateCodeCount > 0
                 ? "Corporate sector discounts applied only to travelers with a valid corporate code."
+                : frequentFlyerDiscountCount > 0
+                    ? "Frequent-flyer discounts applied to eligible domestic, regional, and international flight lines."
+                    : frequentFlyerCodeCount > 0
+                        ? "Frequent-flyer codes accepted, but no eligible flight discounts were applied."
                 : customerDiscountCount > 0
                     ? "Customer discounts of 13.5% applied to eligible traveler subtotals above R15,000."
                     : customerCodeCount > 0
@@ -279,6 +325,14 @@ public sealed class TravelQuoteService
             [TravelSector.Hotel] = 0.11m,
             [TravelSector.Car] = 0.08m,
             [TravelSector.Parking] = 0.067m
+        };
+
+    private static decimal FrequentFlyerDiscountRate(TravelClassification? classification) =>
+        classification switch
+        {
+            TravelClassification.Domestic => 0.12m,
+            TravelClassification.Regional or TravelClassification.International => 0.20m,
+            _ => 0m
         };
 
     private static void ValidateReturnFlight(TravelItinerary itinerary, bool includesFlight)

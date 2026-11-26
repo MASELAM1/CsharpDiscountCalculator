@@ -2,7 +2,8 @@
 
 PhaseB is a separate version of the calculator. The original discount calculator
 remains at the repository root; this phase adds named travelers, selected
-sectors, hotel categories, demo prices, and corporate/customer discount codes.
+sectors, hotel categories, demo prices, and corporate, customer, and
+frequent-flyer discount codes.
 
 ## Run
 
@@ -109,16 +110,20 @@ outbound flight.
 
 - Corporate code `111ZAA` applies sector discounts: Flight 10%, Hotel 11%,
   Car 8%, and Parking 6.7%.
-- Each traveler can enter a corporate code, a customer code, or neither.
-- A corporate code `111ZAA` applies sector discounts only to the traveler who
-  entered it: Flight 10%, Hotel 11%, Car 8%, and Parking 6.7%.
+- Discount eligibility is calculated separately for each traveler.
+- Each traveler can enter a unique frequent-flyer code in the format
+  `ZAA` + six digits + `FR` (for example, `ZAA989343FR`). It gives 12% off
+  domestic flight lines and 20% off regional or international flight lines.
+  Domestic + International itineraries are not included in these flight
+  classification rates.
 - A customer code must contain three letters followed by `333` (for example,
   `ABC333`). A valid customer code gives that traveler 13.5% off their
   pre-discount subtotal only when it is **above** R15,000. Exactly R15,000
   does not qualify.
-- Corporate discounts take precedence for that traveler if both valid codes
-  are entered; the discounts are not stacked. Other travelers' codes and
-  discounts are calculated independently.
+- Codes are evaluated per traveler in this order: corporate, frequent-flyer,
+  then customer. Discounts are not stacked. The frequent-flyer discount applies
+  only to eligible flight lines; other travelers' codes and discounts are
+  calculated independently.
 - All amounts are rounded to two decimal places. The quote shows each
   traveler's selected sectors and discounts separately, then sums them into
   the booking totals.
