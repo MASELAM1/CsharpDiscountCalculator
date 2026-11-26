@@ -111,7 +111,7 @@ internal static class TravelerBookingFormPage
               </style>
             </head>
             <body>
-              <h1>Travel booking Quote <small>PhaseB</small></h1>
+              <h1>Travel Booking Quote <small>PhaseB</small></h1>
               <p class="hint">Choose sectors separately for each traveler. A flight itinerary is required only for travelers who select Flight.</p>
               <form method="post">
                 <div id="traveler-fields">
@@ -125,7 +125,7 @@ internal static class TravelerBookingFormPage
         html.Append("""
                 </div>
                 <button type="button" id="add-traveler">Add traveler</button>
-                <button type="submit">Calculate quote</button>
+                <button type="submit">Calculate Quote</button>
               </form>
               <template id="traveler-template">
             """);
@@ -535,7 +535,7 @@ internal static class TravelerBookingFormPage
 
     private static void AppendQuote(StringBuilder html, TravelQuote quote)
     {
-        html.Append("<section class=\"quote\"><h2>Booking quote</h2><p>")
+        html.Append("<section class=\"quote\"><h2>Booking Quote</h2><p>")
             .Append(quote.Travelers.Count)
             .Append(quote.Travelers.Count == 1 ? " traveler" : " travelers")
             .Append("</p>");
