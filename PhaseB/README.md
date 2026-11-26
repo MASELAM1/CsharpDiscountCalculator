@@ -56,6 +56,9 @@ is priced as another one-way fare, with the domestic departure-time surcharge
 applied independently to each leg. For domestic round trips, choose the
 outbound and return flight companies separately; each leg is priced using its
 own company and departure time.
+The flight form and Booking Quote show the maximum baggage allowance beside
+the trip type or flight sector: three bags for Domestic and two for Regional,
+International, or Domestic + International flights.
 
 ## Demo prices
 

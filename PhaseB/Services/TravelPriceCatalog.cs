@@ -204,4 +204,16 @@ public sealed class TravelPriceCatalog
         _hotelMealPricesPerTraveler.TryGetValue(mealOption, out var price)
             ? price
             : throw new ArgumentOutOfRangeException(nameof(mealOption), mealOption, "Unknown hotel meal option.");
+
+    public int GetMaximumBagsPerFlight(TravelClassification classification) =>
+        classification switch
+        {
+            TravelClassification.Domestic => 3,
+            TravelClassification.Regional or TravelClassification.International
+                or TravelClassification.DomesticAndInternational => 2,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(classification),
+                classification,
+                "Unknown travel classification.")
+        };
 }

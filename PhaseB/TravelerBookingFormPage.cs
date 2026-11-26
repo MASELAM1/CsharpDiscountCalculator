@@ -97,6 +97,8 @@ internal static class TravelerBookingFormPage
                 .sectors input, .return-option input { width: auto; }
                 .classification-label { align-items: center; display: flex; gap: .6rem; }
                 .classification-flags { display: inline-flex; gap: .3rem; }
+                .baggage-allowance { align-items: center; display: inline-flex; gap: .35rem; white-space: nowrap; }
+                .baggage-allowance svg { height: 1.25rem; width: 1.25rem; }
                 .country-flag { border: 1px solid #d5d9df; height: 20px; object-fit: cover; width: 30px; }
                 .flight-details, .hotel-details { border: 1px solid #e1e5ea; margin-top: 1rem; padding: .8rem; }
                 .meal-samples { display: flex; gap: .75rem; margin-top: .75rem; }
@@ -175,6 +177,10 @@ internal static class TravelerBookingFormPage
                       field.required = flightSelected;
                     }
                     const domestic = traveler.querySelector('[data-field="classification"]').value === 'Domestic';
+                    const classification = traveler.querySelector('[data-field="classification"]').value;
+                    const baggageAllowance = traveler.querySelector('[data-field="baggageAllowance"]');
+                    baggageAllowance.textContent =
+                      baggageAllowance.dataset[classification.toLowerCase()] + ' bags maximum';
                     updateAirportOptions(traveler, flightSelected);
                     const outboundCompany = traveler.querySelector('.outbound-company');
                     outboundCompany.hidden = !domestic;
@@ -461,7 +467,22 @@ internal static class TravelerBookingFormPage
             classification => classification.ToDisplayName(),
             required: true,
             dataField: "classification");
-        html.Append("<span class=\"classification-flags\" aria-live=\"polite\"></span></div>")
+        html.Append("<span class=\"classification-flags\" aria-live=\"polite\"></span>")
+            .Append("<span class=\"baggage-allowance\" aria-live=\"polite\">");
+        AppendBaggageIcon(html);
+        html.Append("<span data-field=\"baggageAllowance\"");
+        foreach (var classification in Enum.GetValues<TravelClassification>())
+        {
+            html.Append(" data-")
+                .Append(classification.ToString().ToLowerInvariant())
+                .Append("=\"")
+                .Append(catalog.GetMaximumBagsPerFlight(classification))
+                .Append('"');
+        }
+
+        html.Append('>')
+            .Append(catalog.GetMaximumBagsPerFlight(TravelClassification.Domestic))
+            .Append(" bags maximum</span></span></div>")
             .Append("<div class=\"domestic-route-field\">");
         AppendDomesticRouteSelect(
             html,
@@ -544,8 +565,17 @@ internal static class TravelerBookingFormPage
         html.Append("</span>");
     }
 
+    private static void AppendBaggageIcon(StringBuilder html)
+    {
+        html.Append("<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" ")
+            .Append("stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">")
+            .Append("<path d=\"M5 8h14l1 13H4L5 8Z\"></path><path d=\"M9 8V5a3 3 0 0 1 6 0v3\"></path>")
+            .Append("</svg>");
+    }
+
     private static void AppendQuote(StringBuilder html, TravelQuote quote)
     {
+        var catalog = new TravelPriceCatalog();
         html.Append("<section class=\"quote\"><h2>Booking Quote</h2><p>")
             .Append(quote.Travelers.Count)
             .Append(quote.Travelers.Count == 1 ? " traveler" : " travelers")
@@ -600,7 +630,18 @@ internal static class TravelerBookingFormPage
                 var name = line.Sector == TravelSector.Hotel
                     ? $"Hotel ({line.HotelCategory?.ToDisplayName()}, {line.HotelMealOption?.ToDisplayName()})"
                     : line.Sector.ToString();
-                html.Append("<tr><td>").Append(Encode(name)).Append("</td><td>R")
+                html.Append("<tr><td>").Append(Encode(name));
+                if (line.Sector == TravelSector.Flight && line.Classification is { } classification)
+                {
+                    var maximumBags = catalog.GetMaximumBagsPerFlight(classification);
+                    html.Append(" <span class=\"baggage-allowance\" aria-label=\"Maximum baggage allowance: ")
+                        .Append(maximumBags)
+                        .Append(maximumBags == 1 ? " bag\">" : " bags\">");
+                    AppendBaggageIcon(html);
+                    html.Append("<span>").Append(maximumBags).Append(" bags max</span></span>");
+                }
+
+                html.Append("</td><td>R")
                     .Append(FormatPrice(line.Subtotal)).Append("</td><td>R")
                     .Append(FormatPrice(line.DiscountAmount)).Append("</td><td>R")
                     .Append(FormatPrice(line.Total)).Append("</td></tr>");

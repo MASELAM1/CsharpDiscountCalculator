@@ -355,6 +355,18 @@ public class TravelQuoteServiceTests
             < catalog.GetHotelPricePerTraveler(HotelCategory.FiveStar));
     }
 
+    [Theory]
+    [InlineData(TravelClassification.Domestic, 3)]
+    [InlineData(TravelClassification.Regional, 2)]
+    [InlineData(TravelClassification.International, 2)]
+    [InlineData(TravelClassification.DomesticAndInternational, 2)]
+    public void TravelPriceCatalog_ReturnsMaximumBagsPerFlight(
+        TravelClassification classification,
+        int expectedMaximum)
+    {
+        Assert.Equal(expectedMaximum, new TravelPriceCatalog().GetMaximumBagsPerFlight(classification));
+    }
+
     [Fact]
     public void Calculate_UsesSelectedHotelCategoryPriceAndReturnsTravelerNames()
     {
